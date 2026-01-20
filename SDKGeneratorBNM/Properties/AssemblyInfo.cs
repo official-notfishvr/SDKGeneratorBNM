@@ -5,13 +5,13 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("BNMGameStructureGenerator")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("SDKGeneratorBNM")]
+[assembly: AssemblyDescription("https://github.com/official-notfishvr/BNMGameStructureGenerator")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("BNMGameStructureGenerator")]
-[assembly: AssemblyCopyright("Copyright ©  2025")]
-[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCompany("https://github.com/official-notfishvr/BNMGameStructureGenerator")]
+[assembly: AssemblyProduct("SDKGeneratorBNM")]
+[assembly: AssemblyCopyright("Copyright ©  2026")]
+[assembly: AssemblyTrademark("https://github.com/official-notfishvr/BNMGameStructureGenerator")]
 [assembly: AssemblyCulture("")]
 
 // Setting ComVisible to false makes the types in this assembly not visible
