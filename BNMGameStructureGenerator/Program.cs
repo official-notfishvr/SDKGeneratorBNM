@@ -19,7 +19,9 @@ namespace BNMGameStructureGenerator
         static void Main(string[] args)
         {
             bool singleFileMode = args.Contains("--single-file") || args.Contains("-s");
-            EnsureDirectories();
+            Directory.CreateDirectory("./Files");
+            Directory.CreateDirectory($"./{OutputDir}");
+            
             if (!File.Exists(DllPath))
             {
                 Console.WriteLine($"Error: {DllPath} not found.");
@@ -41,12 +43,6 @@ namespace BNMGameStructureGenerator
                 LogError(ex);
             }
             WaitForExit();
-        }
-
-        private static void EnsureDirectories()
-        {
-            Directory.CreateDirectory("./Files");
-            Directory.CreateDirectory($"./{OutputDir}");
         }
 
         private static List<TypeDefinition> LoadTypes()
