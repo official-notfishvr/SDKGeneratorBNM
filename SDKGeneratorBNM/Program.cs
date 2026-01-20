@@ -5,44 +5,115 @@ using System.Linq;
 using System.Text;
 using Mono.Cecil;
 
-namespace BNMGameStructureGenerator
+namespace SDKGeneratorBNM
 {
     internal class Program
     {
         public static HashSet<string> DefinedTypes = new HashSet<string>();
-        private const string DllPath = "./Files/Assembly-CSharp.dll";
-        private const string OutputDir = "BNMResolves";
+        private static string DllPath = "./Files/Assembly-CSharp.dll";
+        private const string OutputDir = "SDK";
         private const string OutputExtension = ".hpp";
 
         private static readonly string[] ExcludedTypePatterns = { "System.Collections", "IEnumerator", "IEnumerable", "ICollection", "IList", "IDictionary" };
 
         static void Main(string[] args)
         {
+            Console.WriteLine("====================================");
+            Console.WriteLine("  SDK Generator for BNM");
+            Console.WriteLine("====================================");
+            Console.WriteLine();
+
             bool singleFileMode = args.Contains("--single-file") || args.Contains("-s");
+            bool helpMode = args.Contains("--help") || args.Contains("-h");
+            bool getterSetterMode = args.Contains("--getter-setter") || args.Contains("-g");
+
+            if (helpMode)
+            {
+                PrintHelp();
+                return;
+            }
+
+            if (getterSetterMode)
+            {
+                Config.MethodNamingStyle = Config.NamingStyle.GetterSetter;
+            }
+
+            if (args.Length > 0 && !args[0].StartsWith("--") && !args[0].StartsWith("-"))
+            {
+                string draggedPath = args[0];
+                if (Directory.Exists(draggedPath))
+                {
+                    string dllInFolder = Path.Combine(draggedPath, "Assembly-CSharp.dll");
+                    if (File.Exists(dllInFolder))
+                    {
+                        DllPath = dllInFolder;
+                    }
+                    else
+                    {
+                        LogError($"Assembly-CSharp.dll not found in {draggedPath}");
+                        WaitForExit();
+                        return;
+                    }
+                }
+                else if (File.Exists(draggedPath) && draggedPath.EndsWith("Assembly-CSharp.dll"))
+                {
+                    DllPath = draggedPath;
+                }
+                else
+                {
+                    LogError($"Invalid path: {draggedPath}");
+                    WaitForExit();
+                    return;
+                }
+            }
+
             Directory.CreateDirectory("./Files");
             Directory.CreateDirectory($"./{OutputDir}");
 
             if (!File.Exists(DllPath))
             {
-                Console.WriteLine($"Error: {DllPath} not found.");
+                LogError($"DLL not found at {DllPath}");
                 WaitForExit();
                 return;
             }
+
             try
             {
                 var types = LoadTypes();
                 if (types.Count == 0)
                 {
+                    LogError("No valid types found in assembly");
                     WaitForExit();
                     return;
                 }
+
+                Console.WriteLine($"[INFO] Processing {types.Count} types...");
                 ProcessTypes(types, singleFileMode);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("[SUCCESS] Generation completed!");
+                Console.ResetColor();
             }
             catch (Exception ex)
             {
-                LogError(ex);
+                LogError($"Fatal: {ex.Message}");
+                File.WriteAllText("GeneratorError.txt", ex.ToString());
             }
             WaitForExit();
+        }
+
+        private static void PrintHelp()
+        {
+            Console.WriteLine("Usage: SDKGeneratorBNM [path] [options]");
+            Console.WriteLine();
+            Console.WriteLine("Arguments:");
+            Console.WriteLine("  [path]               Drag and drop a folder or Assembly-CSharp.dll file");
+            Console.WriteLine();
+            Console.WriteLine("Options:");
+            Console.WriteLine("  -s, --single-file    Generate all types in a single file");
+            Console.WriteLine("  -g, --getter-setter  Use getter_setter naming style instead of GetSet");
+            Console.WriteLine("  -h, --help           Display this help message");
+            Console.WriteLine();
         }
 
         private static List<TypeDefinition> LoadTypes()
@@ -133,12 +204,13 @@ namespace BNMGameStructureGenerator
                 sb.AppendLine("}");
                 sb.AppendLine();
             }
-            File.WriteAllText(Path.Combine(OutputDir, $"BNMResolves{OutputExtension}"), sb.ToString().Replace("StringComparison", "int"));
+            File.WriteAllText(Path.Combine(OutputDir, $"SDK{OutputExtension}"), sb.ToString().Replace("StringComparison", "int"));
         }
 
         private static void GenerateMultipleFiles(IGrouping<string, TypeDefinition>[] grouped, List<string> warnings)
         {
             var generatedTypes = new HashSet<string>();
+            int fileCount = 0;
 
             foreach (var group in grouped)
             {
@@ -168,9 +240,7 @@ namespace BNMGameStructureGenerator
                             for (int i = 0; i < depth; i++)
                                 prefix += "../";
 
-                            string baseInclude = baseNs == "GlobalNamespace"
-                                ? $"#include \"{prefix}GlobalNamespace/{baseName}{OutputExtension}\""
-                                : $"#include \"{prefix}{baseNs.Replace(".", "/")}/{baseName}{OutputExtension}\"";
+                            string baseInclude = baseNs == "GlobalNamespace" ? $"#include \"{prefix}GlobalNamespace/{baseName}{OutputExtension}\"" : $"#include \"{prefix}{baseNs.Replace(".", "/")}/{baseName}{OutputExtension}\"";
 
                             requiredIncludes.Add(baseInclude);
                         }
@@ -230,10 +300,12 @@ namespace BNMGameStructureGenerator
                     sb.AppendLine("}");
                     string className = Utils.FormatTypeNameForStruct(type.Name, typeNamespace);
                     File.WriteAllText(Path.Combine(isGlobal ? Path.Combine(OutputDir, "GlobalNamespace") : nsDir, $"{className}{OutputExtension}"), sb.ToString().Replace("StringComparison", "int"));
+                    fileCount++;
                 }
             }
 
             GenerateForwardDeclarationsFile(grouped);
+            Console.WriteLine($"[INFO] Generated {fileCount} header files");
         }
 
         private static void GenerateForwardDeclarationsFile(IGrouping<string, TypeDefinition>[] grouped)
@@ -365,13 +437,13 @@ namespace BNMGameStructureGenerator
                 var fields = type.Fields.Where(f => !f.IsLiteral && !f.Name.Contains("<")).OrderBy(f => f.Name).ToArray();
                 foreach (var field in fields)
                 {
-                    string getterName = $"Get{Utils.ToPascalCase(Utils.FormatInvalidName(field.Name))}";
+                    string getterName = Config.FormatGetterName(field.Name);
                     if (generatedNames.Add(getterName))
                         GenerateFieldGetter(field, sb, type, indent, warnings);
                 }
                 foreach (var field in fields)
                 {
-                    string setterName = $"Set{Utils.ToPascalCase(Utils.FormatInvalidName(field.Name))}";
+                    string setterName = Config.FormatSetterName(field.Name);
                     if (generatedNames.Add(setterName))
                         GenerateFieldSetter(field, sb, type, indent, warnings);
                 }
@@ -437,7 +509,7 @@ namespace BNMGameStructureGenerator
             string cppType = Utils.GetCppType(field.FieldType, currentClass);
             if (cppType.Contains("void*"))
                 return;
-            string methodName = $"Get{Utils.ToPascalCase(Utils.FormatInvalidName(field.Name))}";
+            string methodName = Config.FormatGetterName(field.Name);
             string varName = Utils.FormatInvalidName(Utils.ToCamelCase(Utils.FormatInvalidName(field.Name)));
             sb.AppendLine($"{indent}    {cppType} {methodName}() {{");
             sb.AppendLine($"{indent}        static Field<{cppType}> {varName} = GetClass().GetField(O(\"{field.Name}\"));");
@@ -454,7 +526,7 @@ namespace BNMGameStructureGenerator
             string cppType = Utils.GetCppType(field.FieldType, currentClass);
             if (cppType.Contains("void*"))
                 return;
-            string methodName = $"Set{Utils.ToPascalCase(Utils.FormatInvalidName(field.Name))}";
+            string methodName = Config.FormatSetterName(field.Name);
             string varName = Utils.FormatInvalidName(Utils.ToCamelCase(Utils.FormatInvalidName(field.Name)));
             sb.AppendLine($"{indent}    void {methodName}({cppType} value) {{");
             sb.AppendLine($"{indent}        static Field<{cppType}> {varName} = GetClass().GetField(O(\"{field.Name}\"));");
@@ -473,17 +545,19 @@ namespace BNMGameStructureGenerator
                 string cppType = Utils.GetCppType(prop.PropertyType, type);
                 if (cppType.Contains("void*"))
                     continue;
-                if (prop.GetMethod != null && generatedNames.Add($"get_{prop.Name}"))
+                if (prop.GetMethod != null && generatedNames.Add(Config.FormatGetterName(prop.Name)))
                 {
-                    sb.AppendLine($"{indent}    {cppType} get_{prop.Name}() {{");
-                    sb.AppendLine($"{indent}        static Method<{cppType}> method = GetClass().GetMethod(O(\"get_{prop.Name}\"));");
+                    string getterName = Config.FormatGetterName(prop.Name);
+                    sb.AppendLine($"{indent}    {cppType} {getterName}() {{");
+                    sb.AppendLine($"{indent}        static Method<{cppType}> method = GetClass().GetMethod(O(\"{Config.GetPropertyMethodName(prop.Name, true)}\"));");
                     sb.AppendLine($"{indent}        return method();");
                     sb.AppendLine($"{indent}    }}");
                 }
-                if (prop.SetMethod != null && generatedNames.Add($"set_{prop.Name}"))
+                if (prop.SetMethod != null && generatedNames.Add(Config.FormatSetterName(prop.Name)))
                 {
-                    sb.AppendLine($"{indent}    void set_{prop.Name}({cppType} value) {{");
-                    sb.AppendLine($"{indent}        static Method<void> method = GetClass().GetMethod(O(\"set_{prop.Name}\"));");
+                    string setterName = Config.FormatSetterName(prop.Name);
+                    sb.AppendLine($"{indent}    void {setterName}({cppType} value) {{");
+                    sb.AppendLine($"{indent}        static Method<void> method = GetClass().GetMethod(O(\"{Config.GetPropertyMethodName(prop.Name, false)}\"));");
                     sb.AppendLine($"{indent}        method(value);");
                     sb.AppendLine($"{indent}    }}");
                 }
@@ -512,13 +586,18 @@ namespace BNMGameStructureGenerator
             }
         }
 
-        private static void LogError(Exception ex)
+        private static void LogError(string message)
         {
-            Console.WriteLine($"Error: {ex.Message}");
-            File.WriteAllText("GeneratorError.txt", ex.ToString());
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[ERROR] {message}");
+            Console.ResetColor();
         }
 
-        private static void WaitForExit() => Console.ReadKey();
+        private static void WaitForExit()
+        {
+            Console.WriteLine();
+            Console.ReadKey();
+        }
     }
 
     internal class TypeDefComparer : IEqualityComparer<TypeDefinition>

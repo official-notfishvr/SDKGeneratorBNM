@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using Mono.Cecil;
 
-namespace BNMGameStructureGenerator
+namespace SDKGeneratorBNM
 {
     public static class Utils
     {
