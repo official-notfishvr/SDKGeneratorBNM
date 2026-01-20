@@ -21,7 +21,7 @@ namespace BNMGameStructureGenerator
             bool singleFileMode = args.Contains("--single-file") || args.Contains("-s");
             Directory.CreateDirectory("./Files");
             Directory.CreateDirectory($"./{OutputDir}");
-            
+
             if (!File.Exists(DllPath))
             {
                 Console.WriteLine($"Error: {DllPath} not found.");
@@ -155,12 +155,33 @@ namespace BNMGameStructureGenerator
                     string typeNamespace = string.IsNullOrEmpty(type.Namespace) ? "GlobalNamespace" : type.Namespace;
                     var requiredIncludes = new HashSet<string>();
 
-                    if (type.BaseType != null && IsGlobalNamespace(type.BaseType))
+                    if (type.BaseType != null && type.BaseType.FullName != "System.Object")
                     {
-                        string inc = GetRelativeIncludePath(typeNamespace, type.BaseType);
-                        if (inc != null)
-                            requiredIncludes.Add(inc);
+                        string baseTypeName = Utils.CleanTypeName(type.BaseType.Name);
+                        if (Program.DefinedTypes.Contains(baseTypeName))
+                        {
+                            string baseNs = string.IsNullOrEmpty(type.BaseType.Namespace) ? "GlobalNamespace" : type.BaseType.Namespace;
+                            string baseName = Utils.FormatTypeNameForStruct(type.BaseType.Name, baseNs);
+
+                            int depth = typeNamespace == "GlobalNamespace" ? 1 : typeNamespace.Split('.').Length;
+                            string prefix = "";
+                            for (int i = 0; i < depth; i++)
+                                prefix += "../";
+
+                            string baseInclude = baseNs == "GlobalNamespace"
+                                ? $"#include \"{prefix}GlobalNamespace/{baseName}{OutputExtension}\""
+                                : $"#include \"{prefix}{baseNs.Replace(".", "/")}/{baseName}{OutputExtension}\"";
+
+                            requiredIncludes.Add(baseInclude);
+                        }
+                        else if (IsGlobalNamespace(type.BaseType))
+                        {
+                            string inc = GetRelativeIncludePath(typeNamespace, type.BaseType);
+                            if (inc != null)
+                                requiredIncludes.Add(inc);
+                        }
                     }
+
                     foreach (var field in type.Fields)
                     {
                         if (IsGlobalNamespace(field.FieldType))
