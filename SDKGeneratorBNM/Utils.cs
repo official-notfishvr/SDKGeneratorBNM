@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,7 +7,7 @@ namespace SDKGeneratorBNM
 {
     public static class Utils
     {
-        public static readonly HashSet<string> ReservedTypeNames = new HashSet<string> { "RenderMode", "Method", "IEnumerator", "IEnumerable", "ICollection", "IList", "IDictionary", "IComparer", "IEqualityComparer", "StringComparison", "BehaviorRegisterDelegate", "BoingReactorField" };
+        public static readonly HashSet<string> ReservedTypeNames = new HashSet<string>();
 
         private static readonly Dictionary<string, string> PrimitiveTypeMappings = new Dictionary<string, string>
         {
@@ -22,26 +21,86 @@ namespace SDKGeneratorBNM
             { "System.Double", "double" },
             { "System.Boolean", "bool" },
             { "System.Char", "char" },
-            { "System.UInt16", "BNM::Types::ushort" },
-            { "System.UInt32", "BNM::Types::uint" },
-            { "System.UInt64", "BNM::Types::ulong" },
-            { "System.Decimal", "BNM::Types::decimal" },
-            { "System.Byte", "BNM::Types::byte" },
-            { "System.SByte", "BNM::Types::sbyte" },
-            { "System.String", "BNM::Structures::Mono::String*" },
-            { "System.Type", "BNM::MonoType*" },
-            { "System.IntPtr", "BNM::Types::nuint" },
-            { "UnityEngine.Object", "BNM::UnityEngine::Object*" },
-            { "UnityEngine.MonoBehaviour", "BNM::UnityEngine::MonoBehaviour*" },
-            { "UnityEngine.Vector2", "BNM::Structures::Unity::Vector2" },
-            { "UnityEngine.Vector3", "BNM::Structures::Unity::Vector3" },
-            { "UnityEngine.Vector4", "BNM::Structures::Unity::Vector4" },
-            { "UnityEngine.Quaternion", "BNM::Structures::Unity::Quaternion" },
-            { "UnityEngine.Rect", "BNM::Structures::Unity::Rect" },
-            { "UnityEngine.Color", "BNM::Structures::Unity::Color" },
-            { "UnityEngine.Color32", "BNM::Structures::Unity::Color32" },
-            { "UnityEngine.Ray", "BNM::Structures::Unity::Ray" },
-            { "UnityEngine.RaycastHit", "BNM::Structures::Unity::RaycastHit" },
+            { "System.UInt16", "::BNM::Types::ushort" },
+            { "System.UInt32", "::BNM::Types::uint" },
+            { "System.UInt64", "::BNM::Types::ulong" },
+            { "System.String", "::BNM::Structures::Mono::String*" },
+            { "System.Type", "::BNM::MonoType*" },
+            { "System.IntPtr", "::BNM::Types::nint" },
+            { "System.UIntPtr", "::BNM::Types::nuint" },
+            { "System.Collections.IEnumerator", "::BNM::Coroutine::IEnumerator*" },
+            { "System.StringComparison", "int" },
+            { "System.Object", "void*" },
+            { "UnityEngine.Vector2", "::BNM::Structures::Unity::Vector2" },
+            { "UnityEngine.Vector3", "::BNM::Structures::Unity::Vector3" },
+            { "UnityEngine.Vector4", "::BNM::Structures::Unity::Vector4" },
+            { "UnityEngine.Quaternion", "::BNM::Structures::Unity::Quaternion" },
+            { "UnityEngine.Matrix4x4", "::BNM::Structures::Unity::Matrix4x4" },
+            { "UnityEngine.Color", "::BNM::Structures::Unity::Color" },
+            { "UnityEngine.Rect", "::BNM::Structures::Unity::Rect" },
+            { "UnityEngine.Ray", "::BNM::Structures::Unity::Ray" },
+            { "UnityEngine.RaycastHit", "::BNM::Structures::Unity::RaycastHit" },
+            { "System.Action", "::BNM::Structures::Mono::Action<>*" },
+            { "System.Collections.IEnumerable", "::BNM::IL2CPP::Il2CppObject*" },
+            { "System.Collections.ICollection", "::BNM::IL2CPP::Il2CppObject*" },
+            { "System.Collections.IList", "::BNM::IL2CPP::Il2CppObject*" },
+            { "System.Collections.IDictionary", "::BNM::IL2CPP::Il2CppObject*" },
+            { "System.Collections.IComparer", "::BNM::IL2CPP::Il2CppObject*" },
+            { "System.Collections.IEqualityComparer", "::BNM::IL2CPP::Il2CppObject*" },
+        };
+
+        public static readonly Dictionary<string, string> BnmResolveTypeMappings = new Dictionary<string, string>
+        {
+            { "UnityEngine.Transform", "::Transform*" },
+            { "UnityEngine.GameObject", "::GameObject*" },
+            { "UnityEngine.Component", "::Component*" },
+            { "UnityEngine.Collider", "::Collider*" },
+            { "UnityEngine.Rigidbody", "::Rigidbody*" },
+            { "UnityEngine.Animator", "::Animator*" },
+            { "UnityEngine.Camera", "::Camera*" },
+            { "UnityEngine.Canvas", "::Canvas*" },
+            { "UnityEngine.RectTransform", "::RectTransform*" },
+            { "UnityEngine.UI.Text", "::Text*" },
+            { "UnityEngine.Behaviour", "::Behaviour*" },
+            { "UnityEngine.UI.CanvasScaler", "::CanvasScaler*" },
+            { "UnityEngine.EventSystems.UIBehavior", "::UIBehavior*" },
+            { "UnityEngine.EventSystems.BaseRaycaster", "::BaseRaycaster*" },
+            { "UnityEngine.UI.GraphicRaycaster", "::GraphicRaycaster*" },
+            { "UnityEngine.Shader", "::Shader*" },
+            { "UnityEngine.Material", "::Material*" },
+            { "UnityEngine.Renderer", "::Renderer*" },
+            { "UnityEngine.SkinnedMeshRenderer", "::SkinnedMeshRenderer*" },
+            { "UnityEngine.UI.Graphic", "::Graphic*" },
+            { "UnityEngine.UI.MaskableGraphic", "::MaskableGraphic*" },
+            { "UnityEngine.UI.Font", "::Font*" },
+            { "UnityEngine.LineRenderer", "::LineRenderer*" },
+            { "UnityEngine.Time", "::Time*" },
+            { "UnityEngine.SphereCollider", "::SphereCollider*" },
+            { "UnityEngine.BoxCollider", "::BoxCollider*" },
+            { "UnityEngine.MeshRenderer", "::MeshRenderer*" },
+            { "UnityEngine.Resources", "::Resources*" },
+            { "UnityEngine.AssetBundle", "::AssetBundle*" },
+            { "UnityEngine.Physics", "::Physics*" },
+            { "UnityEngine.LightmapData", "::LightmapData*" },
+            { "UnityEngine.LightmapSettings", "::LightmapSettings*" },
+            { "UnityEngine.Texture2D", "::Texture2D*" },
+            { "UnityEngine.Gradient", "::Gradient*" },
+            { "UnityEngine.Skybox", "::Skybox*" },
+            { "UnityEngine.Sprite", "::Sprite*" },
+            { "UnityEngine.QualitySettings", "::QualitySettings*" },
+            { "UnityEngine.ParticleSystem", "::ParticleSystem*" },
+            { "UnityEngine.ParticleSystem.EmissionModule", "::EmissionModule*" },
+            { "UnityEngine.Light", "::Light*" },
+            { "UnityEngine.AudioClip", "::AudioClip*" },
+            { "UnityEngine.AudioSource", "::AudioSource*" },
+            { "UnityEngine.LODGroup", "::LODGroup*" },
+            { "UnityEngine.MonoBehaviour", "::MonoBehaviour*" },
+            { "UnityEngine.Application", "::Application*" },
+            { "UnityEngine.Networking.UnityWebRequest", "::UnityWebRequest*" },
+            { "UnityEngine.Networking.DownloadHandler.DownloadHandlerTexture", "::DownloadHandlerTexture*" },
+            { "UnityEngine.GL", "::GL*" },
+            { "TMPro.TextMeshPro", "::TextMeshPro*" },
+            { "TMPro.TMP_Text", "::TMP_Text*" },
         };
 
         private static readonly HashSet<string> CppKeywords = new HashSet<string>
@@ -51,9 +110,6 @@ namespace SDKGeneratorBNM
             "and",
             "and_eq",
             "asm",
-            "atomic_cancel",
-            "atomic_commit",
-            "atomic_noexcept",
             "auto",
             "bitand",
             "bitor",
@@ -62,19 +118,13 @@ namespace SDKGeneratorBNM
             "case",
             "catch",
             "char",
-            "char8_t",
-            "char16_t",
-            "char32_t",
             "class",
             "compl",
             "concept",
             "const",
             "consteval",
             "constexpr",
-            "constinit",
-            "const_cast",
             "continue",
-            "contract_assert",
             "co_await",
             "co_return",
             "co_yield",
@@ -108,9 +158,9 @@ namespace SDKGeneratorBNM
             "operator",
             "or",
             "or_eq",
-            "public",
+            "private",
             "protected",
-            "reflexpr",
+            "public",
             "register",
             "reinterpret_cast",
             "requires",
@@ -123,7 +173,6 @@ namespace SDKGeneratorBNM
             "static_cast",
             "struct",
             "switch",
-            "synchronized",
             "template",
             "this",
             "thread_local",
@@ -143,157 +192,146 @@ namespace SDKGeneratorBNM
             "while",
             "xor",
             "xor_eq",
-            "abstract",
-            "add",
-            "as",
-            "base",
-            "byte",
-            "checked",
-            "decimal",
-            "delegate",
-            "event",
-            "finally",
-            "fixed",
-            "foreach",
-            "implicit",
-            "in",
-            "interface",
-            "internal",
-            "is",
-            "lock",
-            "null",
-            "object",
-            "out",
-            "override",
-            "params",
-            "readonly",
-            "ref",
-            "remove",
-            "sbyte",
-            "sealed",
-            "stackalloc",
-            "string",
-            "typeof",
-            "uint",
-            "ulong",
-            "unchecked",
-            "unsafe",
-            "ushort",
-            "value",
-            "when",
-            "where",
-            "yield",
-            "INT32_MAX",
-            "INT32_MIN",
-            "UINT32_MAX",
-            "UINT16_MAX",
-            "INT16_MAX",
-            "UINT8_MAX",
-            "INT8_MAX",
-            "INT_MAX",
-            "Assert",
-            "NULL",
-            "O",
         };
 
-        public static string CleanTypeName(string typeName)
+        public static string CleanTypeName(string typeName) => typeName;
+
+        public static string GetNamespace(TypeReference type)
         {
-            return typeName.Contains("`") ? typeName.Split('`')[0] : typeName;
+            if (type.IsNested)
+                return GetNamespace(type.DeclaringType);
+            string ns = type.Namespace;
+            return (string.IsNullOrEmpty(ns) || ns == "GlobalNamespace") ? "GlobalNamespace" : ns;
         }
 
-        public static string GetBaseClass(TypeDefinition type)
+        public static string FixNamespace(string ns) => (string.IsNullOrEmpty(ns) || ns == "GlobalNamespace") ? "GlobalNamespace" : ns.Replace(".", "_");
+
+        public static string GetFullCppPath(TypeDefinition type)
         {
-            var baseType = type.BaseType;
-            if (baseType == null || baseType.FullName == "System.Object")
-                return string.Empty;
-
-            string baseTypeName = CleanTypeName(baseType.Name);
-
-            if (baseType.Namespace != null && baseType.Namespace.StartsWith("UnityEngine"))
-            {
-                if (baseTypeName == "MonoBehaviour" || baseTypeName == "Object" || baseTypeName == "Component")
-                {
-                    return $" : BNM::UnityEngine::{baseTypeName}";
-                }
-                if (baseTypeName == "Behaviour")
-                {
-                    return " : BNM::UnityEngine::MonoBehaviour";
-                }
-                return " : BNM::UnityEngine::Object";
-            }
-
-            if (Program.DefinedTypes.Contains(baseTypeName))
-            {
-                string ns = baseType.Namespace ?? string.Empty;
-                return string.IsNullOrEmpty(ns) ? $" : GlobalNamespace::{baseTypeName}" : $" : {ns.Replace(".", "::")}::{baseTypeName}";
-            }
-
-            return string.Empty;
+            return "::" + FixNamespace(GetNamespace(type)) + "::" + FormatTypeNameForStruct(type);
         }
 
-        public static string GetCppType(TypeReference typeRef, TypeDefinition context = null)
+        public static bool ShouldAddDependency(TypeReference type, TypeDefinition context, bool ignoreClassCheck = false)
         {
+            if (type == null)
+                return false;
+            var resolved = type.Resolve();
+            if (resolved == null)
+                return false;
+            string fullName = resolved.FullName;
+            if (fullName == context.FullName)
+                return false;
+            if (PrimitiveTypeMappings.ContainsKey(fullName) || BnmResolveTypeMappings.ContainsKey(fullName))
+                return false;
+            if (resolved.Namespace == "System" || resolved.Namespace.StartsWith("System."))
+                return false;
+            if (resolved.Namespace.StartsWith("UnityEngine"))
+                return false;
+            if (!Program.DefinedTypes.Contains(fullName))
+                return false;
+            if (ignoreClassCheck)
+                return true;
+            return resolved.IsEnum || resolved.IsValueType;
+        }
+
+        public static string GetCppType(TypeReference typeRef, TypeDefinition context = null, HashSet<TypeDefinition> deps = null)
+        {
+            if (typeRef.IsByReference)
+                return GetCppType(typeRef.GetElementType(), context, deps) + "&";
+            if (typeRef.IsPointer)
+                return GetCppType(typeRef.GetElementType(), context, deps) + "*";
+            if (typeRef.IsArray)
+                return $"::BNM::Structures::Mono::Array<{GetCppType(typeRef.GetElementType(), context, deps)}>*";
+            if (typeRef.IsGenericParameter)
+                return typeRef.Name;
+
             try
             {
-                if (typeRef == null)
-                    return "BNM::IL2CPP::Il2CppObject*";
-
-                if (typeRef.IsPointer)
-                    return "void* /*POINTER*/";
-
-                if (typeRef is GenericInstanceType)
-                    return "void* /*GENERICTYPE*/";
-
-                if (IsNullableType(typeRef))
-                    typeRef = GetNullableUnderlyingType(typeRef);
-
                 string fullName = typeRef.FullName;
-
                 if (PrimitiveTypeMappings.TryGetValue(fullName, out var mappedType))
                     return mappedType;
+                if (BnmResolveTypeMappings.TryGetValue(fullName, out var bnmType))
+                    return bnmType;
 
-                if (typeRef.Namespace != null && typeRef.Namespace.StartsWith("UnityEngine"))
+                if (typeRef is GenericInstanceType git)
                 {
-                    string name = CleanTypeName(typeRef.Name);
-                    if (name == "GameObject" || name == "Transform")
-                        return "void* /*UNITYENGINE_TYPE*/";
+                    string baseFullName = git.ElementType.FullName.Split('<')[0];
+                    string args = string.Join(", ", git.GenericArguments.Select(a => GetCppType(a, context, deps)));
+                    if (baseFullName == "System.Collections.Generic.List`1")
+                        return $"::BNM::Structures::Mono::List<{args}>*";
+                    if (baseFullName == "System.Collections.Generic.Dictionary`2")
+                        return $"::BNM::Structures::Mono::Dictionary<{args}>*";
+                    if (baseFullName.StartsWith("System.Action`"))
+                        return $"::BNM::Structures::Mono::Action<{args}>*";
+                    if (baseFullName.StartsWith("System.Func`"))
+                        return $"::BNM::Structures::Mono::Func<{args}>*";
 
-                    if (name == "MonoBehaviour" || name == "Object" || name == "Component" || name == "Behaviour")
+                    var resBase = git.ElementType.Resolve();
+                    if (resBase != null && ShouldAddDependency(resBase, context))
                     {
-                        if (name == "Behaviour")
-                            name = "MonoBehaviour";
-                        return $"BNM::UnityEngine::{name}*";
+                        if (deps != null)
+                            deps.Add(resBase);
+                        return $"{GetFullCppPath(resBase)}<{args}>*";
                     }
-                    return "BNM::IL2CPP::Il2CppObject*";
+                    return "void*";
                 }
 
-                if (typeRef is ArrayType arrType)
+                var resolved = typeRef.Resolve();
+                if (resolved == null)
+                    return "::BNM::IL2CPP::Il2CppObject*";
+                if (resolved.IsInterface)
+                    return "void*";
+                if (resolved.IsValueType && !resolved.IsEnum)
+                    return "void*";
+
+                if (ShouldAddDependency(resolved, context))
                 {
-                    string elementCppType = GetCppType(arrType.ElementType, context);
-                    if (elementCppType.Contains("void*"))
-                        return "void* /*ARRAY*/";
-                    return $"BNM::Structures::Mono::Array<{elementCppType}>*";
+                    if (deps != null)
+                        deps.Add(resolved);
+                    return GetFullCppPath(resolved) + (resolved.IsEnum || resolved.IsValueType ? "" : "*");
                 }
 
-                string customTypeName = CleanTypeName(typeRef.Name);
-                if (Program.DefinedTypes.Contains(customTypeName))
-                {
-                    string ns = typeRef.Namespace ?? string.Empty;
-                    string prefix = string.IsNullOrEmpty(ns) ? "GlobalNamespace" : ns.Replace(".", "::");
-                    bool isValueType = typeRef.IsValueType;
+                if (resolved.Namespace.StartsWith("UnityEngine"))
+                    return resolved.IsValueType ? "void*" : "::BNM::IL2CPP::Il2CppObject*";
 
-                    if (isValueType)
-                        return "void* /*VALUETYPE*/";
-
-                    return $"{prefix}::{customTypeName}*";
-                }
-
-                return "BNM::IL2CPP::Il2CppObject*";
+                return "void*";
             }
             catch
             {
-                return "void* /*ERROR*/";
+                return "void*";
             }
+        }
+
+        public static string GetClassGetter(TypeDefinition type, string varName = "")
+        {
+            var defTree = new List<TypeDefinition>();
+            var current = type;
+            while (current != null)
+            {
+                defTree.Add(current);
+                current = current.DeclaringType;
+            }
+            defTree.Reverse();
+            var builder = new StringBuilder();
+            var firstType = defTree[0];
+            if (string.IsNullOrEmpty(varName))
+                builder.Append($"::BNM::Class(\"{firstType.Namespace}\", \"{firstType.Name}\")");
+            else
+                builder.Append($"::BNM::Class {varName} = ::BNM::Class(\"{firstType.Namespace}\", \"{firstType.Name}\")");
+            for (int i = 1; i < defTree.Count; i++)
+                builder.Append($".GetInnerClass(\"{defTree[i].Name}\")");
+            return builder.ToString();
+        }
+
+        public static string GetRelativeIncludePath(string from, string to, string typeName)
+        {
+            if (from == to)
+                return $"{typeName}.hpp";
+            string fromDir = FixNamespace(from);
+            string toDir = FixNamespace(to);
+            if (fromDir == toDir)
+                return $"{typeName}.hpp";
+            return $"../{toDir}/{typeName}.hpp";
         }
 
         public static string ToPascalCase(string input)
@@ -303,14 +341,12 @@ namespace SDKGeneratorBNM
             var parts = input.Split('_');
             var result = new StringBuilder();
             foreach (var part in parts)
-            {
                 if (!string.IsNullOrEmpty(part))
                 {
                     result.Append(char.ToUpper(part[0]));
                     if (part.Length > 1)
                         result.Append(part.Substring(1));
                 }
-            }
             return result.ToString();
         }
 
@@ -357,28 +393,20 @@ namespace SDKGeneratorBNM
             return str;
         }
 
-        public static string FormatTypeNameForStruct(string typeName, string namespaceName)
+        public static string FormatTypeNameForStruct(TypeDefinition type)
         {
-            if (typeName.Contains("."))
-                typeName = typeName.Split('.').Last();
-            string cleanName = CleanTypeName(typeName);
-            return FormatInvalidName(cleanName);
+            if (type.IsNested)
+                return FormatTypeNameForStruct(type.DeclaringType) + "_" + FormatInvalidName(CleanTypeName(type.Name));
+            return FormatInvalidName(CleanTypeName(type.Name));
         }
 
         public static string GetEnumUnderlyingType(TypeDefinition enumType)
         {
             var field = enumType.Fields.FirstOrDefault(f => f.Name == "value__");
-            return field != null ? GetCppType(field.FieldType) : "int";
-        }
-
-        public static bool IsNullableType(TypeReference typeRef)
-        {
-            return typeRef is GenericInstanceType gt && gt.FullName.Contains("System.Nullable");
-        }
-
-        public static TypeReference GetNullableUnderlyingType(TypeReference typeRef)
-        {
-            return (typeRef is GenericInstanceType gt && gt.GenericArguments.Count > 0) ? gt.GenericArguments[0] : typeRef;
+            if (field == null)
+                return "int";
+            string cppType = GetCppType(field.FieldType);
+            return (cppType == "void*" || cppType.Contains("void")) ? "int" : cppType;
         }
     }
 }
