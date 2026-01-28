@@ -1,4 +1,4 @@
-﻿using System;
+﻿using SDKGeneratorBNM;
 
 namespace SDKGeneratorBNM
 {
@@ -10,7 +10,15 @@ namespace SDKGeneratorBNM
             GetterSetter,
         }
 
-        public static NamingStyle MethodNamingStyle = NamingStyle.GetSet; // i like GetSet better
+        public enum MethodStyle
+        {
+            Wrapper, // GetField(), SetField(), method.Call()
+            Accessor, // field->Get(), field->Set(), method->Call()
+        }
+
+        public static NamingStyle MethodNamingStyle = NamingStyle.GetSet;
+        public static MethodStyle MethodAccessorStyle = MethodStyle.Wrapper;
+        public static bool UseBNMResolve = false; // Use BNMResolve.hpp for (GameObject, Text, etc.) or fallback to Il2CppObject
 
         public static string FormatGetterName(string name)
         {

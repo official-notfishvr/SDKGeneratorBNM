@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using Mono.Cecil;
 
 namespace SDKGeneratorBNM
@@ -13,8 +12,50 @@ namespace SDKGeneratorBNM
         private static string DllPath = "./Files/Assembly-CSharp.dll";
         private const string OutputDir = "SDK";
         private const string OutputExtension = ".hpp";
-
-        private static readonly string[] ExcludedTypePatterns = { "System.Collections", "IEnumerator", "IEnumerable", "ICollection", "IList", "IDictionary" };
+        private static readonly string[] ExcludedTypePatterns = Array.Empty<string>();
+        private static readonly string[] OperatorNames =
+        {
+            "op_Implicit",
+            "op_Explicit",
+            "op_Assign",
+            "op_AdditionAssignment",
+            "op_SubtractionAssignment",
+            "op_MultiplicationAssignment",
+            "op_DivisionAssignment",
+            "op_ModulusAssignment",
+            "op_BitwiseAndAssignment",
+            "op_BitwiseOrAssignment",
+            "op_ExclusiveOrAssignment",
+            "op_LeftShiftAssignment",
+            "op_RightShiftAssignment",
+            "op_Increment",
+            "op_Decrement",
+            "op_UnaryPlus",
+            "op_UnaryNegation",
+            "op_Addition",
+            "op_Subtraction",
+            "op_Multiply",
+            "op_Division",
+            "op_Modulus",
+            "op_OnesComplement",
+            "op_BitwiseAnd",
+            "op_BitwiseOr",
+            "op_ExclusiveOr",
+            "op_LeftShift",
+            "op_RightShift",
+            "op_LogicalNot",
+            "op_LogicalAnd",
+            "op_LogicalOr",
+            "op_Equality",
+            "op_Inequality",
+            "op_LessThan",
+            "op_GreaterThan",
+            "op_LessThanOrEqual",
+            "op_GreaterThanOrEqual",
+            "op_Comma",
+            "op_True",
+            "op_False",
+        };
 
         static void Main(string[] args)
         {
@@ -22,61 +63,35 @@ namespace SDKGeneratorBNM
             Console.WriteLine("  SDK Generator for BNM");
             Console.WriteLine("====================================");
             Console.WriteLine();
-
             bool singleFileMode = args.Contains("--single-file") || args.Contains("-s");
-            bool helpMode = args.Contains("--help") || args.Contains("-h");
             bool getterSetterMode = args.Contains("--getter-setter") || args.Contains("-g");
-
-            if (helpMode)
+            bool accessorMode = args.Contains("--accessor") || args.Contains("-a");
+            bool BNMResolveMode = args.Contains("--bnm-resolve") || args.Contains("-b");
+            if (args.Contains("--help") || args.Contains("-h"))
             {
                 PrintHelp();
                 return;
             }
-
             if (getterSetterMode)
-            {
                 Config.MethodNamingStyle = Config.NamingStyle.GetterSetter;
-            }
-
-            if (args.Length > 0 && !args[0].StartsWith("--") && !args[0].StartsWith("-"))
+            if (accessorMode)
+                Config.MethodAccessorStyle = Config.MethodStyle.Accessor;
+            if (BNMResolveMode)
+                Config.UseBNMResolve = true;
+            string dllPathArg = args.FirstOrDefault(arg => !arg.StartsWith("-"));
+            if (dllPathArg != null && !TrySetDllPath(dllPathArg))
             {
-                string draggedPath = args[0];
-                if (Directory.Exists(draggedPath))
-                {
-                    string dllInFolder = Path.Combine(draggedPath, "Assembly-CSharp.dll");
-                    if (File.Exists(dllInFolder))
-                    {
-                        DllPath = dllInFolder;
-                    }
-                    else
-                    {
-                        LogError($"Assembly-CSharp.dll not found in {draggedPath}");
-                        WaitForExit();
-                        return;
-                    }
-                }
-                else if (File.Exists(draggedPath) && draggedPath.EndsWith("Assembly-CSharp.dll"))
-                {
-                    DllPath = draggedPath;
-                }
-                else
-                {
-                    LogError($"Invalid path: {draggedPath}");
-                    WaitForExit();
-                    return;
-                }
+                WaitForExit();
+                return;
             }
-
             Directory.CreateDirectory("./Files");
             Directory.CreateDirectory($"./{OutputDir}");
-
             if (!File.Exists(DllPath))
             {
                 LogError($"DLL not found at {DllPath}");
                 WaitForExit();
                 return;
             }
-
             try
             {
                 var types = LoadTypes();
@@ -86,10 +101,8 @@ namespace SDKGeneratorBNM
                     WaitForExit();
                     return;
                 }
-
                 Console.WriteLine($"[INFO] Processing {types.Count} types...");
                 ProcessTypes(types, singleFileMode);
-
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("[SUCCESS] Generation completed!");
                 Console.ResetColor();
@@ -102,18 +115,35 @@ namespace SDKGeneratorBNM
             WaitForExit();
         }
 
+        private static bool TrySetDllPath(string path)
+        {
+            if (Directory.Exists(path))
+            {
+                string dll = Path.Combine(path, "Assembly-CSharp.dll");
+                if (File.Exists(dll))
+                {
+                    DllPath = dll;
+                    return true;
+                }
+                LogError($"Assembly-CSharp.dll not found in {path}");
+                return false;
+            }
+            if (File.Exists(path) && path.EndsWith("Assembly-CSharp.dll"))
+            {
+                DllPath = path;
+                return true;
+            }
+            LogError($"Invalid path: {path}");
+            return false;
+        }
+
         private static void PrintHelp()
         {
-            Console.WriteLine("Usage: SDKGeneratorBNM [path] [options]");
-            Console.WriteLine();
-            Console.WriteLine("Arguments:");
-            Console.WriteLine("  [path]               Drag and drop a folder or Assembly-CSharp.dll file");
-            Console.WriteLine();
-            Console.WriteLine("Options:");
+            Console.WriteLine("Usage: SDKGeneratorBNM [path] [options]\n\nOptions:");
             Console.WriteLine("  -s, --single-file    Generate all types in a single file");
-            Console.WriteLine("  -g, --getter-setter  Use getter_setter naming style instead of GetSet");
-            Console.WriteLine("  -h, --help           Display this help message");
-            Console.WriteLine();
+            Console.WriteLine("  -g, --getter-setter  Use getter_setter naming style");
+            Console.WriteLine("  -a, --accessor       Use accessor style (field()->Get())");
+            Console.WriteLine("  -b, --bnm-resolve    Use BNMResolve types\n");
         }
 
         private static List<TypeDefinition> LoadTypes()
@@ -121,27 +151,33 @@ namespace SDKGeneratorBNM
             var allTypes = new List<TypeDefinition>();
             try
             {
-                var module = ModuleDefinition.ReadModule(DllPath);
-                var types = module.Types.ToList();
-                foreach (var type in types)
-                    allTypes.AddRange(type.NestedTypes);
-                allTypes.AddRange(types);
+                var resolver = new DefaultAssemblyResolver();
+                string dir = Path.GetDirectoryName(Path.GetFullPath(DllPath));
+                if (!string.IsNullOrEmpty(dir))
+                    resolver.AddSearchDirectory(dir);
+                var module = ModuleDefinition.ReadModule(DllPath, new ReaderParameters { AssemblyResolver = resolver });
+                foreach (var type in module.Types)
+                    AddTypesRecursive(type, allTypes);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.Message}");
-                return allTypes;
             }
             return allTypes.Where(t => t != null && IsValidType(t)).Distinct(new TypeDefComparer()).ToList();
+        }
+
+        private static void AddTypesRecursive(TypeDefinition type, List<TypeDefinition> list)
+        {
+            list.Add(type);
+            foreach (var nt in type.NestedTypes)
+                AddTypesRecursive(nt, list);
         }
 
         private static bool IsValidType(TypeDefinition type)
         {
             if (type.IsInterface)
                 return false;
-            string fullName = type.FullName;
-            string typeName = type.Name;
-            return !ExcludedTypePatterns.Any(p => fullName.Contains(p) || typeName.Contains(p));
+            return !ExcludedTypePatterns.Any(p => type.FullName.Contains(p) || type.Name.Contains(p));
         }
 
         private static void ProcessTypes(List<TypeDefinition> types, bool singleFileMode)
@@ -149,447 +185,543 @@ namespace SDKGeneratorBNM
             if (!singleFileMode && Directory.Exists(OutputDir))
                 Directory.Delete(OutputDir, true);
             Directory.CreateDirectory(OutputDir);
-
             foreach (var type in types)
-                DefinedTypes.Add(Utils.CleanTypeName(type.Name));
-
-            var grouped = types.GroupBy(t => string.IsNullOrEmpty(t.Namespace) ? "GlobalNamespace" : t.Namespace).OrderBy(g => g.Key).ToArray();
-
-            var warnings = new List<string>();
-
+                DefinedTypes.Add(type.FullName);
+            var grouped = types.GroupBy(t => Utils.FixNamespace(Utils.GetNamespace(t))).OrderBy(g => g.Key).ToArray();
             if (singleFileMode)
-                GenerateSingleFile(types, grouped, warnings);
+                GenerateSingleFile(grouped);
             else
-                GenerateMultipleFiles(grouped, warnings);
+                GenerateMultipleFiles(grouped);
         }
 
-        private static void GenerateSingleFile(List<TypeDefinition> types, IGrouping<string, TypeDefinition>[] grouped, List<string> warnings)
+        private static void GenerateSingleFile(IGrouping<string, TypeDefinition>[] grouped)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("#pragma once");
-            sb.AppendLine("#include <BNMIncludes.hpp>");
-            sb.AppendLine();
-
-            var generatedEnums = new HashSet<string>();
-            var generatedTypes = new HashSet<string>();
-
+            var cw = new CodeWriter();
+            cw.Line();
+            var ens = new HashSet<string>();
+            var tps = new HashSet<string>();
             foreach (var group in grouped)
-                WriteForwardDeclarations(sb, group, generatedEnums, generatedTypes);
-
-            generatedEnums.Clear();
-            generatedTypes.Clear();
-
+                WriteForwardDeclarations(cw, group, ens, tps);
+            ens.Clear();
+            tps.Clear();
             foreach (var group in grouped)
             {
-                bool isGlobal = group.Key == "GlobalNamespace";
-                sb.AppendLine(isGlobal ? "namespace GlobalNamespace {" : $"namespace {group.Key.Replace(".", "::")} {{");
+                cw.StartNamespace(group.Key);
                 foreach (var type in group.OrderBy(t => t.Name))
                 {
-                    string cleanName = Utils.CleanTypeName(type.Name);
-                    if (Utils.ReservedTypeNames.Contains(cleanName) || generatedTypes.Contains(cleanName))
+                    if (tps.Contains(type.FullName))
                         continue;
-                    generatedTypes.Add(cleanName);
+                    tps.Add(type.FullName);
                     if (type.IsEnum)
                     {
-                        string enumName = Utils.FormatTypeNameForStruct(type.Name, type.Namespace);
-                        if (!generatedEnums.Contains(enumName))
-                        {
-                            generatedEnums.Add(enumName);
-                            GenerateEnum(type, sb, isGlobal, warnings);
-                        }
+                        string name = Utils.FormatTypeNameForStruct(type);
+                        if (ens.Add(name))
+                            GenerateEnum(type, cw);
                     }
                     else
-                        GenerateClass(type, sb, isGlobal, warnings);
+                        GenerateClass(type, cw);
                 }
-                sb.AppendLine("}");
-                sb.AppendLine();
+                cw.EndNamespace();
+                cw.Line();
             }
-            File.WriteAllText(Path.Combine(OutputDir, $"SDK{OutputExtension}"), sb.ToString().Replace("StringComparison", "int"));
+            cw.Save(Path.Combine(OutputDir, $"SDK{OutputExtension}"));
         }
 
-        private static void GenerateMultipleFiles(IGrouping<string, TypeDefinition>[] grouped, List<string> warnings)
+        private static void GenerateMultipleFiles(IGrouping<string, TypeDefinition>[] grouped)
         {
-            var generatedTypes = new HashSet<string>();
-            int fileCount = 0;
-
+            int count = 0;
             foreach (var group in grouped)
             {
-                string nsDir = group.Key == "GlobalNamespace" ? Path.Combine(OutputDir, "GlobalNamespace") : Path.Combine(OutputDir, group.Key.Replace(".", "/"));
-                Directory.CreateDirectory(nsDir);
-                var generatedEnums = new HashSet<string>();
-
+                string dir = Path.Combine(OutputDir, Utils.FixNamespace(group.Key));
                 foreach (var type in group.OrderBy(t => t.Name))
                 {
-                    string cleanName = Utils.CleanTypeName(type.Name);
-                    if (Utils.ReservedTypeNames.Contains(cleanName) || generatedTypes.Contains(cleanName))
-                        continue;
-                    generatedTypes.Add(cleanName);
-                    string typeNamespace = string.IsNullOrEmpty(type.Namespace) ? "GlobalNamespace" : type.Namespace;
-                    var requiredIncludes = new HashSet<string>();
-
-                    if (type.BaseType != null && type.BaseType.FullName != "System.Object")
-                    {
-                        string baseTypeName = Utils.CleanTypeName(type.BaseType.Name);
-                        if (Program.DefinedTypes.Contains(baseTypeName))
-                        {
-                            string baseNs = string.IsNullOrEmpty(type.BaseType.Namespace) ? "GlobalNamespace" : type.BaseType.Namespace;
-                            string baseName = Utils.FormatTypeNameForStruct(type.BaseType.Name, baseNs);
-
-                            int depth = typeNamespace == "GlobalNamespace" ? 1 : typeNamespace.Split('.').Length;
-                            string prefix = "";
-                            for (int i = 0; i < depth; i++)
-                                prefix += "../";
-
-                            string baseInclude = baseNs == "GlobalNamespace" ? $"#include \"{prefix}GlobalNamespace/{baseName}{OutputExtension}\"" : $"#include \"{prefix}{baseNs.Replace(".", "/")}/{baseName}{OutputExtension}\"";
-
-                            requiredIncludes.Add(baseInclude);
-                        }
-                        else if (IsGlobalNamespace(type.BaseType))
-                        {
-                            string inc = GetRelativeIncludePath(typeNamespace, type.BaseType);
-                            if (inc != null)
-                                requiredIncludes.Add(inc);
-                        }
-                    }
-
-                    foreach (var field in type.Fields)
-                    {
-                        if (IsGlobalNamespace(field.FieldType))
-                        {
-                            string inc = GetRelativeIncludePath(typeNamespace, field.FieldType);
-                            if (inc != null)
-                                requiredIncludes.Add(inc);
-                        }
-                    }
-                    foreach (var method in type.Methods)
-                    {
-                        if (IsGlobalNamespace(method.ReturnType))
-                        {
-                            string retInc = GetRelativeIncludePath(typeNamespace, method.ReturnType);
-                            if (retInc != null)
-                                requiredIncludes.Add(retInc);
-                        }
-                        foreach (var param in method.Parameters)
-                        {
-                            if (IsGlobalNamespace(param.ParameterType))
-                            {
-                                string paramInc = GetRelativeIncludePath(typeNamespace, param.ParameterType);
-                                if (paramInc != null)
-                                    requiredIncludes.Add(paramInc);
-                            }
-                        }
-                    }
-
-                    var sb = new StringBuilder();
-                    sb.AppendLine("#pragma once");
-                    sb.AppendLine("#include <BNMIncludes.hpp>");
-                    sb.AppendLine("#include \"../ForwardDeclarations.hpp\"");
-                    foreach (var include in requiredIncludes.Distinct())
-                        sb.AppendLine(include);
-                    sb.AppendLine();
-
-                    bool isGlobal = typeNamespace == "GlobalNamespace";
-                    sb.AppendLine(isGlobal ? "namespace GlobalNamespace {" : $"namespace {typeNamespace.Replace(".", "::")} {{");
-                    sb.AppendLine();
-
+                    string ns = Utils.GetNamespace(type);
+                    var cw = new CodeWriter();
+                    cw.StartNamespace(ns);
                     if (type.IsEnum)
-                        GenerateEnum(type, sb, isGlobal, warnings);
+                        GenerateEnum(type, cw);
                     else
-                        GenerateClass(type, sb, isGlobal, warnings);
-
-                    sb.AppendLine("}");
-                    string className = Utils.FormatTypeNameForStruct(type.Name, typeNamespace);
-                    File.WriteAllText(Path.Combine(isGlobal ? Path.Combine(OutputDir, "GlobalNamespace") : nsDir, $"{className}{OutputExtension}"), sb.ToString().Replace("StringComparison", "int"));
-                    fileCount++;
+                        GenerateClass(type, cw);
+                    cw.EndNamespace();
+                    string name = Utils.FormatTypeNameForStruct(type);
+                    cw.Save(Path.Combine(dir, $"{name}{OutputExtension}"));
+                    count++;
                 }
             }
-
             GenerateForwardDeclarationsFile(grouped);
-            Console.WriteLine($"[INFO] Generated {fileCount} header files");
+            Console.WriteLine($"[INFO] Generated {count} header files");
         }
 
         private static void GenerateForwardDeclarationsFile(IGrouping<string, TypeDefinition>[] grouped)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("#pragma once");
-            sb.AppendLine("#include <BNMIncludes.hpp>");
-            sb.AppendLine();
-
-            var generatedEnums = new HashSet<string>();
-            var generatedTypes = new HashSet<string>();
-
+            var cw = new CodeWriter();
+            cw.Line();
+            var ens = new HashSet<string>();
+            var tps = new HashSet<string>();
             foreach (var group in grouped)
             {
-                bool isGlobal = group.Key == "GlobalNamespace";
-                sb.AppendLine(isGlobal ? "namespace GlobalNamespace {" : $"namespace {group.Key.Replace(".", "::")} {{");
-
+                cw.StartNamespace(group.Key);
                 foreach (var type in group.OrderBy(t => t.Name))
                 {
-                    string cleanName = Utils.CleanTypeName(type.Name);
-                    if (Utils.ReservedTypeNames.Contains(cleanName) || generatedTypes.Contains(cleanName))
+                    if (!tps.Add(type.FullName))
                         continue;
-                    generatedTypes.Add(cleanName);
-
-                    string formattedName = Utils.FormatTypeNameForStruct(type.Name, type.Namespace);
+                    string name = Utils.FormatTypeNameForStruct(type);
                     if (type.IsEnum)
                     {
-                        if (generatedEnums.Contains(formattedName))
-                            continue;
-                        generatedEnums.Add(formattedName);
-                        sb.AppendLine($"enum class {formattedName} : {Utils.GetEnumUnderlyingType(type)};");
+                        if (ens.Add(name))
+                            cw.Line($"enum class {name} : {Utils.GetEnumUnderlyingType(type)};");
                     }
                     else
-                        sb.AppendLine($"struct {formattedName};");
+                    {
+                        if (type.HasGenericParameters)
+                            cw.Line($"template <{string.Join(", ", type.GenericParameters.Select(p => $"typename {Utils.FormatInvalidName(p.Name)}"))}> struct {name};");
+                        else
+                            cw.Line($"struct {name};");
+                    }
                 }
-
-                sb.AppendLine("}");
-                sb.AppendLine();
+                cw.EndNamespace();
+                cw.Line();
             }
-
-            File.WriteAllText(Path.Combine(OutputDir, "ForwardDeclarations.hpp"), sb.ToString());
+            cw.Line("namespace BNM::Structures::Mono {\n    template <typename ...Parameters> struct Func : public MulticastDelegate<void> {};\n}\n");
+            cw.Line("namespace System {\n    typedef ::BNM::Structures::Mono::Action<> Action;\n    template <typename ...T> using ActionT = ::BNM::Structures::Mono::Action<T...>;\n    template <typename ...T> using Func = ::BNM::Structures::Mono::Func<T...>;\n}\n");
+            cw.Save(Path.Combine(OutputDir, "ForwardDeclarations.hpp"));
         }
 
-        private static bool IsGlobalNamespace(TypeReference type)
+        private static void WriteForwardDeclarations(CodeWriter cw, IGrouping<string, TypeDefinition> group, HashSet<string> ens, HashSet<string> tps)
         {
-            if (type == null)
-                return false;
-            TypeReference element = type;
-            while (element.IsArray || element.IsByReference || element.IsPointer)
-                element = element.GetElementType();
-            string ns = element.Namespace;
-            return string.IsNullOrEmpty(ns) || ns == "GlobalNamespace";
-        }
-
-        private static string GetRelativeIncludePath(string currentNs, TypeReference targetType)
-        {
-            if (targetType == null || targetType.IsPrimitive || targetType.FullName == "System.Void")
-                return null;
-            TypeReference element = targetType;
-            while (element.IsArray || element.IsByReference || element.IsPointer)
-                element = element.GetElementType();
-            if (element.IsPrimitive || element.FullName == "System.Void")
-                return null;
-            string targetNs = string.IsNullOrEmpty(element.Namespace) ? "GlobalNamespace" : element.Namespace;
-            if (targetNs != "GlobalNamespace")
-                return null;
-            string targetName = Utils.FormatTypeNameForStruct(element.Name, targetNs);
-            if (targetNs == currentNs && targetName == Utils.CleanTypeName(element.Name))
-                return null;
-            int depth = currentNs == "GlobalNamespace" ? 1 : currentNs.Split('.').Length;
-            string prefix = "";
-            for (int i = 0; i < depth; i++)
-                prefix += "../";
-            return $"#include \"{prefix}GlobalNamespace/{targetName}{OutputExtension}\"";
-        }
-
-        private static void WriteForwardDeclarations(StringBuilder sb, IGrouping<string, TypeDefinition> group, HashSet<string> generatedEnums, HashSet<string> generatedTypes)
-        {
-            bool isGlobal = group.Key == "GlobalNamespace";
-            sb.AppendLine(isGlobal ? "namespace GlobalNamespace {" : $"namespace {group.Key.Replace(".", "::")} {{");
+            cw.StartNamespace(group.Key);
             foreach (var type in group.OrderBy(t => t.Name))
             {
-                string cleanName = Utils.CleanTypeName(type.Name);
-                if (Utils.ReservedTypeNames.Contains(cleanName) || generatedTypes.Contains(cleanName))
+                if (!tps.Add(type.FullName))
                     continue;
-                generatedTypes.Add(cleanName);
-                string formattedName = Utils.FormatTypeNameForStruct(type.Name, type.Namespace);
+                string name = Utils.FormatTypeNameForStruct(type);
                 if (type.IsEnum)
                 {
-                    if (generatedEnums.Contains(formattedName))
-                        continue;
-                    generatedEnums.Add(formattedName);
-                    sb.AppendLine($"enum class {formattedName} : {Utils.GetEnumUnderlyingType(type)};");
+                    if (ens.Add(name))
+                        cw.Line($"enum class {name} : {Utils.GetEnumUnderlyingType(type)};");
                 }
                 else
-                    sb.AppendLine($"struct {formattedName};");
+                {
+                    if (type.HasGenericParameters)
+                        cw.Line($"template <{string.Join(", ", type.GenericParameters.Select(p => $"typename {Utils.FormatInvalidName(p.Name)}"))}> struct {name};");
+                    else
+                        cw.Line($"struct {name};");
+                }
             }
-            sb.AppendLine("}");
-            sb.AppendLine();
+            cw.EndNamespace();
+            cw.Line();
         }
 
-        private static void GenerateClass(TypeDefinition type, StringBuilder sb, bool isGlobal, List<string> warnings)
+        private static void GenerateClass(TypeDefinition type, CodeWriter cw)
         {
             try
             {
-                string className = Utils.FormatTypeNameForStruct(type.Name, type.Namespace);
-                string indent = isGlobal ? "" : "    ";
-                if (ExcludedTypePatterns.Any(p => type.FullName.Contains(p) || type.Name.Contains(p)))
-                    return;
-                string baseClass = Utils.GetBaseClass(type);
-                if (baseClass.Contains("__REMOVE__"))
-                    return;
-                if (!string.IsNullOrEmpty(baseClass))
-                    sb.AppendLine($"{indent}struct {className}{baseClass} {{");
-                else
-                    sb.AppendLine($"{indent}struct {className} : BNM::UnityEngine::MonoBehaviour {{");
-                sb.AppendLine($"{indent}public:");
-                var generatedNames = new HashSet<string> { "GetClass", "GetType", "ToString", "Equals", "GetHashCode", "MemberwiseClone", "Finalize" };
-                sb.AppendLine($"{indent}    static Class GetClass() {{");
-                sb.AppendLine($"{indent}        static BNM::Class clazz = Class(O(\"{type.Namespace ?? ""}\"), O(\"{type.Name}\"), Image(O(\"Assembly-CSharp.dll\")));");
-                sb.AppendLine($"{indent}        return clazz;");
-                sb.AppendLine($"{indent}    }}");
-                sb.AppendLine();
-                sb.AppendLine($"{indent}    static MonoType* GetType() {{");
-                sb.AppendLine($"{indent}        return GetClass().GetMonoType();");
-                sb.AppendLine($"{indent}    }}");
-                sb.AppendLine();
-                GenerateSingletonMethods(type, sb, generatedNames, indent);
-                var fields = type.Fields.Where(f => !f.IsLiteral && !f.Name.Contains("<")).OrderBy(f => f.Name).ToArray();
-                foreach (var field in fields)
-                {
-                    string getterName = Config.FormatGetterName(field.Name);
-                    if (generatedNames.Add(getterName))
-                        GenerateFieldGetter(field, sb, type, indent, warnings);
-                }
-                foreach (var field in fields)
-                {
-                    string setterName = Config.FormatSetterName(field.Name);
-                    if (generatedNames.Add(setterName))
-                        GenerateFieldSetter(field, sb, type, indent, warnings);
-                }
-                GeneratePropertyMethods(type, sb, generatedNames, indent, warnings);
-                GenerateMethodDeclarations(type, sb, generatedNames, indent, warnings);
-                sb.AppendLine($"{indent}}};");
-                sb.AppendLine();
+                string name = Utils.FormatTypeNameForStruct(type);
+                string bc = GetBaseClass(type, cw.Imports);
+                var gns = new HashSet<string> { "GetClass", "GetType", "ToString", "Equals", "GetHashCode", "MemberwiseClone", "Finalize", "get_Instance", "GetInstance", "NewArray", "NewList" };
+                if (type.HasGenericParameters)
+                    cw.Line($"template <{string.Join(", ", type.GenericParameters.Select(p => $"typename {Utils.FormatInvalidName(p.Name)}"))}>");
+                cw.Line($"struct {name}{(string.IsNullOrEmpty(bc) ? " : BNM::UnityEngine::MonoBehaviour" : bc)} {{");
+                cw.Line("public:");
+                cw.Indent();
+                cw.Line("static BNM::Class GetClass() {");
+                cw.Indent();
+                cw.Line($"static BNM::Class clazz = {Utils.GetClassGetter(type)};");
+                cw.Line("return clazz;");
+                cw.Unindent();
+                cw.Line("}");
+                cw.Line();
+                cw.Line("static BNM::MonoType* GetType() { return GetClass().GetMonoType(); }");
+                cw.Line();
+                GenerateSingletonMethods(type, cw, gns);
+                GenerateConstants(type, cw, gns);
+                GeneratePropertyMethods(type, cw, gns);
+                GenerateEventMethods(type, cw, gns);
+                var fds = type.Fields.Where(f => !f.IsLiteral && !f.Name.Contains("<")).OrderBy(f => f.Name).ToArray();
+                foreach (var f in fds)
+                    GenerateFieldGetter(f, cw, type, gns);
+                foreach (var f in fds)
+                    GenerateFieldSetter(f, cw, type, gns);
+                GenerateMethodDeclarations(type, cw, gns);
+                //GenerateUtilityMethods(type, cw, gns);
+                cw.Unindent();
+                cw.Line("};");
             }
             catch { }
         }
 
-        private static void GenerateEnum(TypeDefinition type, StringBuilder sb, bool isGlobal, List<string> warnings)
+        private static void GenerateConstants(TypeDefinition type, CodeWriter cw, HashSet<string> gns)
+        {
+            foreach (var f in type.Fields.Where(f => f.IsLiteral && f.Constant != null))
+            {
+                string t = Utils.GetCppType(f.FieldType, type, cw.Imports);
+                if (t.Contains("*") && f.FieldType.FullName != "System.String" || t.Contains("&") || t.Contains("<"))
+                    continue;
+                string val = f.Constant.ToString()?.ToLower();
+                if (string.IsNullOrEmpty(val))
+                    continue;
+                if (f.FieldType.FullName == "System.String")
+                {
+                    if (gns.Add(f.Name))
+                        cw.Line($"static constexpr const char* {f.Name} = \"{f.Constant}\";");
+                    continue;
+                }
+                if (gns.Add(f.Name))
+                {
+                    var res = f.FieldType.Resolve();
+                    if (f.FieldType.FullName == "System.Single" || f.FieldType.FullName == "System.Double")
+                    {
+                        if (!val.Contains(".") && !val.Contains("e"))
+                            val += ".0";
+                        if (f.FieldType.FullName == "System.Single")
+                            val += "f";
+                    }
+                    else if (res != null && res.IsEnum)
+                        val = $"({t}){val}";
+                    cw.Line($"static constexpr {t} {f.Name} = {val};");
+                }
+            }
+        }
+
+        private static void GenerateEnum(TypeDefinition type, CodeWriter cw)
         {
             try
             {
-                string enumName = Utils.FormatTypeNameForStruct(type.Name, type.Namespace);
-                string underlyingType = Utils.GetEnumUnderlyingType(type);
-                string indent = isGlobal ? "" : "    ";
-                sb.AppendLine($"{indent}enum class {enumName} : {underlyingType} {{");
-                var usedNames = new HashSet<string>();
-                foreach (var field in type.Fields.Where(f => f.IsStatic && f.IsLiteral))
+                string name = Utils.FormatTypeNameForStruct(type);
+                cw.Line($"enum class {name} : {Utils.GetEnumUnderlyingType(type)} {{");
+                cw.Indent();
+                var used = new HashSet<string>();
+                foreach (var f in type.Fields.Where(f => f.IsStatic && f.IsLiteral))
                 {
-                    string name = field.Name;
-                    string uniqueName = name;
-                    int suffix = 1;
-                    while (usedNames.Contains(uniqueName))
-                        uniqueName = $"{name}_{suffix++}";
-                    usedNames.Add(uniqueName);
-                    string valueStr = field.Constant != null ? Convert.ToInt64(field.Constant).ToString() : "0";
-                    string formattedName = Utils.FormatInvalidName(uniqueName);
-                    if (formattedName.ToLower() != "delete")
-                        sb.AppendLine($"{indent}    {formattedName} = {valueStr},");
+                    string fn = f.Name;
+                    string un = fn;
+                    int s = 1;
+                    while (used.Contains(un))
+                        un = $"{fn}_{s++}";
+                    used.Add(un);
+                    string val = f.Constant != null ? Convert.ToInt64(f.Constant).ToString() : "0";
+                    string fmt = Utils.FormatInvalidName(un);
+                    if (fmt.ToLower() != "delete")
+                        cw.Line($"{fmt} = {val},");
                 }
-                sb.AppendLine($"{indent}}};");
-                sb.AppendLine();
+                cw.Unindent();
+                cw.Line("};");
             }
             catch { }
         }
 
-        private static void GenerateSingletonMethods(TypeDefinition type, StringBuilder sb, HashSet<string> generatedNames, string indent)
+        private static void GenerateSingletonMethods(TypeDefinition type, CodeWriter cw, HashSet<string> gns)
         {
-            var instanceProp = type.Properties.FirstOrDefault(p => p.Name == "Instance" && p.GetMethod != null);
-            var instanceField = type.Fields.FirstOrDefault(f => f.Name == "_instance" && f.IsStatic);
-            string className = Utils.FormatTypeNameForStruct(type.Name, type.Namespace);
-            if (instanceProp != null && generatedNames.Add("get_Instance"))
+            var p = type.Properties.FirstOrDefault(p => p.Name == "Instance" && p.GetMethod != null);
+            var f = type.Fields.FirstOrDefault(f => f.Name == "_instance" && f.IsStatic);
+            string name = Utils.FormatTypeNameForStruct(type);
+            if (p != null && gns.Add("get_Instance"))
             {
-                sb.AppendLine($"{indent}    static {className}* get_Instance() {{");
-                sb.AppendLine($"{indent}        static Method<{className}*> method = GetClass().GetMethod(O(\"get_Instance\"));");
-                sb.AppendLine($"{indent}        return method();");
-                sb.AppendLine($"{indent}    }}");
+                cw.Line($"static {name}* get_Instance() {{");
+                cw.Indent();
+                cw.Line($"static BNM::Method<{name}*> method = GetClass().GetMethod(O(\"get_Instance\"));");
+                cw.Line("return method.Call();");
+                cw.Unindent();
+                cw.Line("}");
             }
-            if (instanceField != null && generatedNames.Add("GetInstance"))
+            if (f != null && gns.Add("GetInstance"))
             {
-                sb.AppendLine($"{indent}    static {className}* GetInstance() {{");
-                sb.AppendLine($"{indent}        static Field<{className}*> field = GetClass().GetField(O(\"_instance\"));");
-                sb.AppendLine($"{indent}        return field();");
-                sb.AppendLine($"{indent}    }}");
+                cw.Line($"static {name}* GetInstance() {{");
+                cw.Indent();
+                cw.Line($"static BNM::Field<{name}*> field = GetClass().GetField(O(\"_instance\"));");
+                cw.Line("return field.Get();");
+                cw.Unindent();
+                cw.Line("}");
             }
         }
 
-        private static void GenerateFieldGetter(FieldDefinition field, StringBuilder sb, TypeDefinition currentClass, string indent, List<string> warnings)
+        private static void GenerateFieldGetter(FieldDefinition f, CodeWriter cw, TypeDefinition current, HashSet<string> gns)
         {
-            string cppType = Utils.GetCppType(field.FieldType, currentClass);
-            if (cppType.Contains("void*"))
+            string t = Utils.GetCppType(f.FieldType, current, cw.Imports);
+            var resolved = f.FieldType.Resolve();
+            if (resolved != null && Utils.ShouldAddDependency(resolved, current))
+                cw.Imports.Add(resolved);
+            if (t.Contains("$") || (t.Contains("T") && !current.HasGenericParameters))
                 return;
-            string methodName = Config.FormatGetterName(field.Name);
-            string varName = Utils.FormatInvalidName(Utils.ToCamelCase(Utils.FormatInvalidName(field.Name)));
-            sb.AppendLine($"{indent}    {cppType} {methodName}() {{");
-            sb.AppendLine($"{indent}        static Field<{cppType}> {varName} = GetClass().GetField(O(\"{field.Name}\"));");
-            if (!field.IsStatic)
-                sb.AppendLine($"{indent}        {varName}.SetInstance((BNM::IL2CPP::Il2CppObject*)this);");
-            sb.AppendLine($"{indent}        return {varName}();");
-            sb.AppendLine($"{indent}    }}");
-        }
-
-        private static void GenerateFieldSetter(FieldDefinition field, StringBuilder sb, TypeDefinition currentClass, string indent, List<string> warnings)
-        {
-            if (field.IsInitOnly)
-                return;
-            string cppType = Utils.GetCppType(field.FieldType, currentClass);
-            if (cppType.Contains("void*"))
-                return;
-            string methodName = Config.FormatSetterName(field.Name);
-            string varName = Utils.FormatInvalidName(Utils.ToCamelCase(Utils.FormatInvalidName(field.Name)));
-            sb.AppendLine($"{indent}    void {methodName}({cppType} value) {{");
-            sb.AppendLine($"{indent}        static Field<{cppType}> {varName} = GetClass().GetField(O(\"{field.Name}\"));");
-            if (!field.IsStatic)
-                sb.AppendLine($"{indent}        {varName}.SetInstance((BNM::IL2CPP::Il2CppObject*)this);");
-            sb.AppendLine($"{indent}        {varName} = value;");
-            sb.AppendLine($"{indent}    }}");
-        }
-
-        private static void GeneratePropertyMethods(TypeDefinition type, StringBuilder sb, HashSet<string> generatedNames, string indent, List<string> warnings)
-        {
-            foreach (var prop in type.Properties.OrderBy(p => p.Name))
+            string mn = Config.FormatGetterName(f.Name);
+            while (!gns.Add(mn))
+                mn += "_f";
+            if (Config.MethodAccessorStyle == Config.MethodStyle.Accessor)
             {
-                if (prop.Name.Contains("<") || prop.Name.Contains("."))
+                cw.Line($"{(f.IsStatic ? "static " : "")}BNM::Field<{t}>* {f.Name}() {{");
+                cw.Indent();
+                cw.Line($"static BNM::Field<{t}> _field = GetClass().GetField(O(\"{f.Name}\"));");
+                if (!f.IsStatic)
+                    cw.Line("_field.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                cw.Line("return &_field;");
+                cw.Unindent();
+                cw.Line("}");
+            }
+            else
+            {
+                if (t == "void*")
+                    cw.Line("template <typename T = void*>");
+                cw.Line($"{(f.IsStatic ? "static " : "")}{t} {mn}() {{");
+                cw.Indent();
+                cw.Line($"static BNM::Field<{t}> _field = GetClass().GetField(O(\"{f.Name}\"));");
+                if (!f.IsStatic)
+                    cw.Line("_field.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                cw.Line("return _field.Get();");
+                cw.Unindent();
+                cw.Line("}");
+            }
+        }
+
+        private static void GenerateFieldSetter(FieldDefinition f, CodeWriter cw, TypeDefinition current, HashSet<string> gns)
+        {
+            if (f.IsInitOnly)
+                return;
+            string t = Utils.GetCppType(f.FieldType, current, cw.Imports);
+            var resolved = f.FieldType.Resolve();
+            if (resolved != null && Utils.ShouldAddDependency(resolved, current))
+                cw.Imports.Add(resolved);
+            if (t.Contains("$") || (t.Contains("T") && !current.HasGenericParameters))
+                return;
+            if (Config.MethodAccessorStyle == Config.MethodStyle.Accessor)
+                return;
+            string mn = Config.FormatSetterName(f.Name);
+            while (!gns.Add(mn))
+                mn += "_fs";
+            if (t == "void*")
+                cw.Line("template <typename T = void*>");
+            cw.Line($"{(f.IsStatic ? "static " : "")}void {mn}({t} value) {{");
+            cw.Indent();
+            cw.Line($"static BNM::Field<{t}> _field = GetClass().GetField(O(\"{f.Name}\"));");
+            if (!f.IsStatic)
+                cw.Line("_field.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+            cw.Line("_field.Set(value);");
+            cw.Unindent();
+            cw.Line("}");
+        }
+
+        private static void GeneratePropertyMethods(TypeDefinition type, CodeWriter cw, HashSet<string> gns)
+        {
+            foreach (var p in type.Properties.OrderBy(prop => prop.Name))
+            {
+                if (p.Name.Contains("<") || p.Name.Contains("."))
                     continue;
-                string cppType = Utils.GetCppType(prop.PropertyType, type);
-                if (cppType.Contains("void*"))
+                string t = Utils.GetCppType(p.PropertyType, type, cw.Imports);
+                if (t == "void*" || t.Contains("$"))
                     continue;
-                if (prop.GetMethod != null && generatedNames.Add(Config.FormatGetterName(prop.Name)))
+                if (Config.MethodAccessorStyle == Config.MethodStyle.Accessor)
                 {
-                    string getterName = Config.FormatGetterName(prop.Name);
-                    sb.AppendLine($"{indent}    {cppType} {getterName}() {{");
-                    sb.AppendLine($"{indent}        static Method<{cppType}> method = GetClass().GetMethod(O(\"{Config.GetPropertyMethodName(prop.Name, true)}\"));");
-                    sb.AppendLine($"{indent}        return method();");
-                    sb.AppendLine($"{indent}    }}");
+                    string mn = Utils.FormatInvalidName(p.Name);
+                    while (!gns.Add(mn))
+                        mn += "_p";
+                    cw.Line($"BNM::Property<{t}>* {mn}() {{");
+                    cw.Indent();
+                    cw.Line($"static BNM::Property<{t}> property = GetClass().GetProperty(O(\"{p.Name}\"));");
+                    if (!type.IsValueType)
+                        cw.Line("property.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                    cw.Line("return &property;");
+                    cw.Unindent();
+                    cw.Line("}");
                 }
-                if (prop.SetMethod != null && generatedNames.Add(Config.FormatSetterName(prop.Name)))
+                else
                 {
-                    string setterName = Config.FormatSetterName(prop.Name);
-                    sb.AppendLine($"{indent}    void {setterName}({cppType} value) {{");
-                    sb.AppendLine($"{indent}        static Method<void> method = GetClass().GetMethod(O(\"{Config.GetPropertyMethodName(prop.Name, false)}\"));");
-                    sb.AppendLine($"{indent}        method(value);");
-                    sb.AppendLine($"{indent}    }}");
+                    if (p.GetMethod != null)
+                    {
+                        string mn = Config.FormatGetterName(p.Name);
+                        while (!gns.Add(mn))
+                            mn += "_pg";
+                        cw.Line($"{t} {mn}() {{");
+                        cw.Indent();
+                        cw.Line($"static BNM::Method<{t}> _method = GetClass().GetMethod(O(\"{Config.GetPropertyMethodName(p.Name, true)}\"));");
+                        if (!type.IsValueType)
+                            cw.Line("_method.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                        cw.Line("return _method.Call();");
+                        cw.Unindent();
+                        cw.Line("}");
+                    }
+                    if (p.SetMethod != null)
+                    {
+                        string mn = Config.FormatSetterName(p.Name);
+                        while (!gns.Add(mn))
+                            mn += "_ps";
+                        cw.Line($"void {mn}({t} value) {{");
+                        cw.Indent();
+                        cw.Line($"static BNM::Method<void> _method = GetClass().GetMethod(O(\"{Config.GetPropertyMethodName(p.Name, false)}\"));");
+                        if (!type.IsValueType)
+                            cw.Line("_method.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                        cw.Line("_method.Call(value);");
+                        cw.Unindent();
+                        cw.Line("}");
+                    }
                 }
             }
         }
 
-        private static void GenerateMethodDeclarations(TypeDefinition type, StringBuilder sb, HashSet<string> generatedNames, string indent, List<string> warnings)
+        private static void GenerateEventMethods(TypeDefinition type, CodeWriter cw, HashSet<string> gns)
         {
-            foreach (var method in type.Methods.Where(m => !m.IsConstructor && !m.Name.Contains("<") && !m.Name.Contains(".")).OrderBy(m => m.Name))
+            foreach (var e in type.Events.OrderBy(evt => evt.Name))
             {
-                string methodName = Utils.FormatInvalidName(method.Name).Replace(".", "_");
-                if (!generatedNames.Add(methodName))
+                if (e.Name.Contains("<") || e.Name.Contains("."))
                     continue;
-                string returnCppType = Utils.GetCppType(method.ReturnType, type);
-                if (returnCppType.Contains("void*"))
+                string t = Utils.GetCppType(e.EventType, type, cw.Imports);
+                if (t.Contains("$") || t == "void*")
                     continue;
-                var paramNames = Utils.MakeValidParams(method.Parameters.Select(p => p.Name).ToArray());
-                var paramTypes = method.Parameters.Select(p => Utils.GetCppType(p.ParameterType, type)).ToArray();
-                if (paramTypes.Any(pt => pt.Contains("void*")))
-                    continue;
-                string paramList = string.Join(", ", paramTypes.Zip(paramNames, (pt, pn) => $"{pt} {pn}"));
-                sb.AppendLine($"{indent}    {returnCppType} {methodName}({paramList}) {{");
-                sb.AppendLine($"{indent}        static Method<{returnCppType}> method = GetClass().GetMethod(O(\"{method.Name}\"));");
-                sb.AppendLine($"{indent}        return method({string.Join(", ", paramNames)});");
-                sb.AppendLine($"{indent}    }}");
+                string an = $"add_{e.Name}";
+                string rn = $"remove_{e.Name}";
+                if (gns.Add(an))
+                {
+                    cw.Line($"void {an}({t} d) {{");
+                    cw.Indent();
+                    cw.Line($"static BNM::Method<void> _m = GetClass().GetMethod(O(\"add_{e.Name}\"));");
+                    if (!type.IsValueType)
+                        cw.Line("_m.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                    cw.Line("_m.Call(d);");
+                    cw.Unindent();
+                    cw.Line("}");
+                }
+                if (gns.Add(rn))
+                {
+                    cw.Line($"void {rn}({t} d) {{");
+                    cw.Indent();
+                    cw.Line($"static BNM::Method<void> _m = GetClass().GetMethod(O(\"remove_{e.Name}\"));");
+                    if (!type.IsValueType)
+                        cw.Line("_m.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                    cw.Line("_m.Call(d);");
+                    cw.Unindent();
+                    cw.Line("}");
+                }
             }
         }
 
-        private static void LogError(string message)
+        private static void GenerateMethodDeclarations(TypeDefinition type, CodeWriter cw, HashSet<string> gns)
+        {
+            var methodSigs = new HashSet<string>();
+            var nonMethodNames = new HashSet<string>(gns);
+            foreach (var m in type.Methods.Where(m => !m.IsConstructor && !m.Name.Contains("<") && !m.Name.Contains(".") && !OperatorNames.Contains(m.Name)).OrderBy(m => m.Name).ThenBy(m => m.Parameters.Count))
+            {
+                string mn = Utils.FormatInvalidName(m.Name).Replace(".", "_");
+                bool prob = false;
+                var pts = new List<string>();
+                foreach (var p in m.Parameters)
+                {
+                    string pt = Utils.GetCppType(p.ParameterType, type, cw.Imports);
+                    if (pt.Contains("$") || (pt.Contains("T") && !type.HasGenericParameters && !m.HasGenericParameters))
+                    {
+                        prob = true;
+                        break;
+                    }
+                    pts.Add(pt);
+                }
+                if (prob)
+                    continue;
+                string rt = Utils.GetCppType(m.ReturnType, type, cw.Imports);
+                if (rt.Contains("$") || (rt.Contains("T") && !type.HasGenericParameters && !m.HasGenericParameters))
+                    continue;
+                var tmps = new List<string>();
+                if (m.HasGenericParameters)
+                    tmps.AddRange(m.GenericParameters.Select(p => $"typename {Utils.FormatInvalidName(p.Name)}"));
+                if (rt == "void*")
+                {
+                    tmps.Add("typename TRet = void*");
+                    rt = "TRet";
+                }
+                for (int i = 0; i < pts.Count; i++)
+                    if (pts[i] == "void*")
+                    {
+                        tmps.Add($"typename TP{i} = void*");
+                        pts[i] = $"TP{i}";
+                    }
+                string sk = $"{mn}({string.Join(",", pts)})";
+                string fmn = mn;
+                if (nonMethodNames.Contains(fmn) || methodSigs.Contains(sk))
+                {
+                    int i = 1;
+                    while (nonMethodNames.Contains($"{mn}_{i}") || methodSigs.Contains($"{mn}_{i}({string.Join(",", pts)})"))
+                        i++;
+                    fmn = $"{mn}_{i}";
+                }
+                methodSigs.Add(sk);
+                gns.Add(fmn);
+                if (tmps.Count > 0)
+                    cw.Line($"template <{string.Join(", ", tmps)}>");
+                var pns = Utils.MakeValidParams(m.Parameters.Select(p => p.Name).ToArray());
+                string pl = string.Join(", ", pts.Zip(pns, (pt, pn) => $"{pt} {pn}"));
+                if (Config.MethodAccessorStyle == Config.MethodStyle.Accessor)
+                {
+                    string paramNames = m.Parameters.Count > 0 ? ", {" + string.Join(", ", m.Parameters.Select(p => $"\"{p.Name}\"")) + "}" : "";
+                    cw.Line($"{(m.IsStatic ? "static " : "")}BNM::Method<{rt}>* {fmn}({pl}) {{");
+                    cw.Indent();
+                    cw.Line($"static BNM::Method<{rt}> _m = GetClass().GetMethod(O(\"{m.Name}\"){paramNames});");
+                    if (!m.IsStatic)
+                        cw.Line("_m.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                    cw.Line("return &_m;");
+                    cw.Unindent();
+                    cw.Line("}");
+                }
+                else
+                {
+                    cw.Line($"{(m.IsStatic ? "static " : "")}{rt} {fmn}({pl}) {{");
+                    cw.Indent();
+                    string cp = m.Parameters.Count > 0 ? string.Join(", ", pns.Select((p, i) => (m.Parameters[i].ParameterType.IsByReference ? "&" : "") + p)) : "";
+                    string paramNames = m.Parameters.Count > 0 ? ", {" + string.Join(", ", m.Parameters.Select(p => $"\"{p.Name}\"")) + "}" : "";
+                    cw.Line($"static BNM::Method<{rt}> _m = GetClass().GetMethod(O(\"{m.Name}\"){paramNames});");
+                    if (!m.IsStatic)
+                        cw.Line("_m.SetInstance(reinterpret_cast<::BNM::IL2CPP::Il2CppObject*>(this));");
+                    if (rt == "void")
+                        cw.Line($"_m.Call({cp});");
+                    else
+                        cw.Line($"return _m.Call({cp});");
+                    cw.Unindent();
+                    cw.Line("}");
+                }
+            }
+        }
+
+        private static void GenerateUtilityMethods(TypeDefinition type, CodeWriter cw, HashSet<string> gns) // why not
+        {
+            if (!type.IsValueType && !type.IsInterface)
+            {
+                string name = Utils.FormatTypeNameForStruct(type);
+                if (gns.Add("NewArray"))
+                    cw.Line($"static BNM::Structures::Mono::Array<{name}*>* NewArray(int size) {{ return GetClass().NewArray<{name}*>(size); }}");
+                if (gns.Add("NewList"))
+                    cw.Line($"static BNM::Structures::Mono::List<{name}*>* NewList() {{ return GetClass().NewList<{name}*>(); }}");
+            }
+        }
+
+        private static string GetBaseClass(TypeDefinition type, HashSet<TypeDefinition> deps = null)
+        {
+            var bt = type.BaseType;
+            if (bt == null || bt.FullName == "System.Object")
+                return string.Empty;
+            var res = bt.Resolve();
+            if (res != null && Utils.ShouldAddDependency(res, type, true))
+                deps.Add(res);
+            string btn = Utils.CleanTypeName(bt.Name);
+            if (bt.Namespace?.StartsWith("UnityEngine") ?? false)
+                return btn switch
+                {
+                    "MonoBehaviour" or "Object" or "Component" => $" : BNM::UnityEngine::{btn}",
+                    "Behaviour" => " : BNM::UnityEngine::MonoBehaviour",
+                    _ => " : BNM::UnityEngine::Object",
+                };
+            if (res != null && Program.DefinedTypes.Contains(res.FullName))
+            {
+                string ns = Utils.FixNamespace(Utils.GetNamespace(res));
+                string baseName = Utils.FormatTypeNameForStruct(res);
+                if (bt is GenericInstanceType git)
+                {
+                    string args = string.Join(", ", git.GenericArguments.Select(a => Utils.GetCppType(a, type, deps)));
+                    return $" : ::{ns}::{baseName}<{args}>";
+                }
+                return $" : ::{ns}::{baseName}";
+            }
+            return string.Empty;
+        }
+
+        private static void LogError(string msg)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"[ERROR] {message}");
+            Console.WriteLine($"[ERROR] {msg}");
             Console.ResetColor();
         }
 
