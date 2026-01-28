@@ -10,6 +10,8 @@ An SDK generator for BNM (ByNameModding) that creates C++ headers from Unity IL2
 4. Wait for your SDK to be generated
 5. Copy the SDK folder to your project
 6. Copy BNM headers to your project (And include it to your Android.mk or CMakeList.txt)
+7. Download [BNMIncludes.hpp](https://github.com/official-notfishvr/BNMGameStructureGenerator/blob/main/Include/BNMIncludes.hpp) and place it in your `Include` folder
+8. If using the `-b` or `--bnm-resolve` flag, also download [BNMResolve.hpp](https://github.com/Livku2/BNMResolve/blob/main/BNMResolve.hpp) and place it in your `Include` folder
 
 ## CMake Configuration
 
