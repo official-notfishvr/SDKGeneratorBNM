@@ -9,7 +9,7 @@ namespace SDKGeneratorBNM
     internal class Program
     {
         public static HashSet<string> DefinedTypes = new HashSet<string>();
-        private static string DllPath = "./Files/Assembly-CSharp.dll";
+        private static List<string> DllPaths = new List<string>();
         private const string OutputDir = "SDK";
         private const string OutputExtension = ".hpp";
         private static readonly string[] ExcludedTypePatterns = Array.Empty<string>();
@@ -78,20 +78,39 @@ namespace SDKGeneratorBNM
                 Config.MethodAccessorStyle = Config.MethodStyle.Accessor;
             if (BNMResolveMode)
                 Config.UseBNMResolve = true;
-            string dllPathArg = args.FirstOrDefault(arg => !arg.StartsWith("-"));
-            if (dllPathArg != null && !TrySetDllPath(dllPathArg))
+            var filesToAdd = new List<string>();
+            for (int i = 0; i < args.Length; i++)
             {
+                if (args[i] == "--file" && i + 1 < args.Length)
+                {
+                    i++;
+                    while (i < args.Length && !args[i].StartsWith("-"))
+                    {
+                        filesToAdd.Add(args[i]);
+                        i++;
+                    }
+                    i--;
+                }
+                else if (!args[i].StartsWith("-"))
+                {
+                    filesToAdd.Add(args[i]);
+                }
+            }
+            if (filesToAdd.Count == 0) filesToAdd.Add("Assembly-CSharp.dll");
+
+            foreach (var file in filesToAdd)
+                TryAddDllPath(file);
+
+            if (DllPaths.Count == 0)
+            {
+                LogError("No valid DLLs found or specified");
                 WaitForExit();
                 return;
             }
+
             Directory.CreateDirectory("./Files");
             Directory.CreateDirectory($"./{OutputDir}");
-            if (!File.Exists(DllPath))
-            {
-                LogError($"DLL not found at {DllPath}");
-                WaitForExit();
-                return;
-            }
+
             try
             {
                 var types = LoadTypes();
@@ -101,7 +120,7 @@ namespace SDKGeneratorBNM
                     WaitForExit();
                     return;
                 }
-                Console.WriteLine($"[INFO] Processing {types.Count} types...");
+                Console.WriteLine($"[INFO] Processing {types.Count} types from {DllPaths.Count} assemblies...");
                 ProcessTypes(types, singleFileMode);
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("[SUCCESS] Generation completed!");
@@ -115,31 +134,49 @@ namespace SDKGeneratorBNM
             WaitForExit();
         }
 
-        private static bool TrySetDllPath(string path)
+        private static bool TryAddDllPath(string path)
         {
             if (Directory.Exists(path))
             {
                 string dll = Path.Combine(path, "Assembly-CSharp.dll");
                 if (File.Exists(dll))
                 {
-                    DllPath = dll;
+                    DllPaths.Add(dll);
                     return true;
                 }
                 LogError($"Assembly-CSharp.dll not found in {path}");
                 return false;
             }
-            if (File.Exists(path) && path.EndsWith("Assembly-CSharp.dll"))
+            if (File.Exists(path) && path.EndsWith(".dll"))
             {
-                DllPath = path;
+                DllPaths.Add(path);
                 return true;
             }
-            LogError($"Invalid path: {path}");
+            string filesPath = Path.Combine("./Files", path);
+            if (File.Exists(filesPath) && filesPath.EndsWith(".dll"))
+            {
+                DllPaths.Add(filesPath);
+                return true;
+            }
+            if (!path.EndsWith(".dll"))
+            {
+                filesPath = Path.Combine("./Files", path + ".dll");
+                if (File.Exists(filesPath))
+                {
+                    DllPaths.Add(filesPath);
+                    return true;
+                }
+            }
+            LogError($"Invalid path or DLL not found: {path}");
             return false;
         }
 
         private static void PrintHelp()
         {
-            Console.WriteLine("Usage: SDKGeneratorBNM [path] [options]\n\nOptions:");
+            Console.WriteLine("Usage: SDKGeneratorBNM [file] [options]\n\nArguments:");
+            Console.WriteLine("  file             Path to DLL file (e.g., Assembly-CSharp.dll, MyAssembly.dll)");
+            Console.WriteLine("                       Can be a full path, filename in ./Files, or just the name\n");
+            Console.WriteLine("Options:");
             Console.WriteLine("  -s, --single-file    Generate all types in a single file");
             Console.WriteLine("  -g, --getter-setter  Use getter_setter naming style");
             Console.WriteLine("  -a, --accessor       Use accessor style (field()->Get())");
@@ -149,19 +186,28 @@ namespace SDKGeneratorBNM
         private static List<TypeDefinition> LoadTypes()
         {
             var allTypes = new List<TypeDefinition>();
-            try
+            foreach (var dllPath in DllPaths)
             {
-                var resolver = new DefaultAssemblyResolver();
-                string dir = Path.GetDirectoryName(Path.GetFullPath(DllPath));
-                if (!string.IsNullOrEmpty(dir))
-                    resolver.AddSearchDirectory(dir);
-                var module = ModuleDefinition.ReadModule(DllPath, new ReaderParameters { AssemblyResolver = resolver });
-                foreach (var type in module.Types)
-                    AddTypesRecursive(type, allTypes);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
+                try
+                {
+                    var resolver = new DefaultAssemblyResolver();
+                    string dir = Path.GetDirectoryName(Path.GetFullPath(dllPath));
+                    if (!string.IsNullOrEmpty(dir))
+                        resolver.AddSearchDirectory(dir);
+                    foreach (var otherDll in DllPaths)
+                    {
+                        string otherDir = Path.GetDirectoryName(Path.GetFullPath(otherDll));
+                        if (!string.IsNullOrEmpty(otherDir))
+                            resolver.AddSearchDirectory(otherDir);
+                    }
+                    var module = ModuleDefinition.ReadModule(dllPath, new ReaderParameters { AssemblyResolver = resolver });
+                    foreach (var type in module.Types)
+                        AddTypesRecursive(type, allTypes);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading {dllPath}: {ex.Message}");
+                }
             }
             return allTypes.Where(t => t != null && IsValidType(t)).Distinct(new TypeDefComparer()).ToList();
         }
@@ -459,8 +505,6 @@ namespace SDKGeneratorBNM
             }
             else
             {
-                if (t == "void*")
-                    cw.Line("template <typename T = void*>");
                 cw.Line($"{(f.IsStatic ? "static " : "")}{t} {mn}() {{");
                 cw.Indent();
                 cw.Line($"static BNM::Field<{t}> _field = GetClass().GetField(O(\"{f.Name}\"));");
@@ -487,8 +531,6 @@ namespace SDKGeneratorBNM
             string mn = Config.FormatSetterName(f.Name);
             while (!gns.Add(mn))
                 mn += "_fs";
-            if (t == "void*")
-                cw.Line("template <typename T = void*>");
             cw.Line($"{(f.IsStatic ? "static " : "")}void {mn}({t} value) {{");
             cw.Indent();
             cw.Line($"static BNM::Field<{t}> _field = GetClass().GetField(O(\"{f.Name}\"));");
@@ -619,11 +661,6 @@ namespace SDKGeneratorBNM
                 var tmps = new List<string>();
                 if (m.HasGenericParameters)
                     tmps.AddRange(m.GenericParameters.Select(p => $"typename {Utils.FormatInvalidName(p.Name)}"));
-                if (rt == "void*")
-                {
-                    tmps.Add("typename TRet = void*");
-                    rt = "TRet";
-                }
                 for (int i = 0; i < pts.Count; i++)
                     if (pts[i] == "void*")
                     {

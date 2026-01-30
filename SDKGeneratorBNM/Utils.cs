@@ -12,18 +12,18 @@ namespace SDKGeneratorBNM
         private static readonly Dictionary<string, string> PrimitiveTypeMappings = new Dictionary<string, string>
         {
             { "System.Void", "void" },
-            { "System.Int8", "int8_t" },
-            { "System.UInt8", "uint8_t" },
-            { "System.Int16", "short" },
+            { "System.Byte", "uint8_t" },
+            { "System.SByte", "int8_t" },
+            { "System.Int16", "int16_t" },
             { "System.Int32", "int" },
             { "System.Int64", "int64_t" },
             { "System.Single", "float" },
             { "System.Double", "double" },
             { "System.Boolean", "bool" },
             { "System.Char", "char" },
-            { "System.UInt16", "::BNM::Types::ushort" },
-            { "System.UInt32", "::BNM::Types::uint" },
-            { "System.UInt64", "::BNM::Types::ulong" },
+            { "System.UInt16", "uint16_t" },
+            { "System.UInt32", "uint32_t" },
+            { "System.UInt64", "uint64_t" },
             { "System.String", "::BNM::Structures::Mono::String*" },
             { "System.Type", "::BNM::MonoType*" },
             { "System.IntPtr", "::BNM::Types::nint" },
@@ -250,7 +250,7 @@ namespace SDKGeneratorBNM
                 string fullName = typeRef.FullName;
                 if (PrimitiveTypeMappings.TryGetValue(fullName, out var mappedType))
                     return mappedType;
-                if (BnmResolveTypeMappings.TryGetValue(fullName, out var bnmType))
+                if (Config.UseBNMResolve && BnmResolveTypeMappings.TryGetValue(fullName, out var bnmType))
                     return bnmType;
 
                 if (typeRef is GenericInstanceType git)
@@ -267,11 +267,15 @@ namespace SDKGeneratorBNM
                         return $"::BNM::Structures::Mono::Func<{args}>*";
 
                     var resBase = git.ElementType.Resolve();
-                    if (resBase != null && ShouldAddDependency(resBase, context))
+                    if (resBase != null)
                     {
-                        if (deps != null)
-                            deps.Add(resBase);
-                        return $"{GetFullCppPath(resBase)}<{args}>*";
+                        if (Program.DefinedTypes.Contains(resBase.FullName))
+                        {
+                            if (deps != null && ShouldAddDependency(resBase, context))
+                                deps.Add(resBase);
+                            return $"{GetFullCppPath(resBase)}<{args}>*";
+                        }
+                        return "void*";
                     }
                     return "void*";
                 }
@@ -279,22 +283,23 @@ namespace SDKGeneratorBNM
                 var resolved = typeRef.Resolve();
                 if (resolved == null)
                     return "::BNM::IL2CPP::Il2CppObject*";
-                if (resolved.IsInterface)
-                    return "void*";
-                if (resolved.IsValueType && !resolved.IsEnum)
-                    return "void*";
-
-                if (ShouldAddDependency(resolved, context))
-                {
-                    if (deps != null)
-                        deps.Add(resolved);
-                    return GetFullCppPath(resolved) + (resolved.IsEnum || resolved.IsValueType ? "" : "*");
-                }
 
                 if (resolved.Namespace.StartsWith("UnityEngine"))
                     return resolved.IsValueType ? "void*" : "::BNM::IL2CPP::Il2CppObject*";
 
-                return "void*";
+                if (resolved.IsInterface)
+                    return "void*";
+
+                if (!Program.DefinedTypes.Contains(resolved.FullName))
+                    return resolved.IsValueType ? "void*" : "::BNM::IL2CPP::Il2CppObject*";
+
+                if (deps != null && ShouldAddDependency(resolved, context))
+                    deps.Add(resolved);
+
+                string cppPath = GetFullCppPath(resolved);
+                if (resolved.IsEnum || resolved.IsValueType)
+                    return cppPath;
+                return cppPath + "*";
             }
             catch
             {
