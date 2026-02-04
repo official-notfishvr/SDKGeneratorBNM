@@ -364,7 +364,7 @@ namespace SDKGeneratorBNM
             {
                 string name = Utils.FormatTypeNameForStruct(type);
                 string bc = GetBaseClass(type, cw.Imports);
-                var gns = new HashSet<string> { "GetClass", "GetType", "ToString", "Equals", "GetHashCode", "MemberwiseClone", "Finalize", "get_Instance", "GetInstance", "NewArray", "NewList" };
+                var gns = new HashSet<string> { "GetClass", "GetType", "ToString", "Equals", "GetHashCode", "MemberwiseClone", "Finalize", "NewArray", "NewList" };
                 if (type.HasGenericParameters)
                     cw.Line($"template <{string.Join(", ", type.GenericParameters.Select(p => $"typename {Utils.FormatInvalidName(p.Name)}"))}>");
                 cw.Line($"struct {name}{(string.IsNullOrEmpty(bc) ? " : BNM::UnityEngine::MonoBehaviour" : bc)} {{");
@@ -459,22 +459,26 @@ namespace SDKGeneratorBNM
         private static void GenerateSingletonMethods(TypeDefinition type, CodeWriter cw, HashSet<string> gns)
         {
             var p = type.Properties.FirstOrDefault(p => p.Name == "Instance" && p.GetMethod != null);
-            var f = type.Fields.FirstOrDefault(f => f.Name == "_instance" && f.IsStatic);
+            var f = type.Fields.FirstOrDefault(f => (f.Name == "_instance" || f.Name == "instance") && f.IsStatic);
             string name = Utils.FormatTypeNameForStruct(type);
+
             if (p != null && gns.Add("get_Instance"))
             {
-                cw.Line($"static {name}* get_Instance() {{");
+                string returnType = Utils.GetCppType(p.PropertyType, type, cw.Imports);
+                cw.Line($"static {returnType} get_Instance() {{");
                 cw.Indent();
-                cw.Line($"static BNM::Method<{name}*> method = GetClass().GetMethod(O(\"get_Instance\"));");
+                cw.Line($"static BNM::Method<{returnType}> method = GetClass().GetMethod(O(\"get_Instance\"));");
                 cw.Line("return method.Call();");
                 cw.Unindent();
                 cw.Line("}");
             }
+
             if (f != null && gns.Add("GetInstance"))
             {
-                cw.Line($"static {name}* GetInstance() {{");
+                string fieldType = Utils.GetCppType(f.FieldType, type, cw.Imports);
+                cw.Line($"static {fieldType} GetInstance() {{");
                 cw.Indent();
-                cw.Line($"static BNM::Field<{name}*> field = GetClass().GetField(O(\"_instance\"));");
+                cw.Line($"static BNM::Field<{fieldType}> field = GetClass().GetField(\"{f.Name}\");");
                 cw.Line("return field.Get();");
                 cw.Unindent();
                 cw.Line("}");
