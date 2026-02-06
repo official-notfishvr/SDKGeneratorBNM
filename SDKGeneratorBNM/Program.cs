@@ -491,7 +491,7 @@ namespace SDKGeneratorBNM
             var resolved = f.FieldType.Resolve();
             if (resolved != null && Utils.ShouldAddDependency(resolved, current))
                 cw.Imports.Add(resolved);
-            if (t.Contains("$") || (t.Contains("T") && !current.HasGenericParameters))
+            if (t.Contains("$") || (f.FieldType.IsGenericParameter && !current.HasGenericParameters))
                 return;
             string mn = Config.FormatGetterName(f.Name);
             while (!gns.Add(mn))
@@ -528,7 +528,7 @@ namespace SDKGeneratorBNM
             var resolved = f.FieldType.Resolve();
             if (resolved != null && Utils.ShouldAddDependency(resolved, current))
                 cw.Imports.Add(resolved);
-            if (t.Contains("$") || (t.Contains("T") && !current.HasGenericParameters))
+            if (t.Contains("$") || (f.FieldType.IsGenericParameter && !current.HasGenericParameters))
                 return;
             if (Config.MethodAccessorStyle == Config.MethodStyle.Accessor)
                 return;
@@ -650,7 +650,7 @@ namespace SDKGeneratorBNM
                 foreach (var p in m.Parameters)
                 {
                     string pt = Utils.GetCppType(p.ParameterType, type, cw.Imports);
-                    if (pt.Contains("$") || (pt.Contains("T") && !type.HasGenericParameters && !m.HasGenericParameters))
+                    if (pt.Contains("$") || (p.ParameterType.IsGenericParameter && !type.HasGenericParameters && !m.HasGenericParameters))
                     {
                         prob = true;
                         break;
@@ -660,7 +660,7 @@ namespace SDKGeneratorBNM
                 if (prob)
                     continue;
                 string rt = Utils.GetCppType(m.ReturnType, type, cw.Imports);
-                if (rt.Contains("$") || (rt.Contains("T") && !type.HasGenericParameters && !m.HasGenericParameters))
+                if (rt.Contains("$") || (m.ReturnType.IsGenericParameter && !type.HasGenericParameters && !m.HasGenericParameters))
                     continue;
                 var tmps = new List<string>();
                 if (m.HasGenericParameters)
