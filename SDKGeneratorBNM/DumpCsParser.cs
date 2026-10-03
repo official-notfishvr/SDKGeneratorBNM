@@ -103,6 +103,37 @@ namespace SDKGeneratorBNM
             return state.AllTypes;
         }
 
+        public static List<TypeDefinition> ParseDumps(IEnumerable<string> paths, Func<TypeDefinition, bool> includeType = null)
+        {
+            var list = paths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
+            if (list.Count == 0)
+                return new List<TypeDefinition>();
+            if (list.Count == 1)
+                return ParseDump(list[0], includeType);
+
+            Console.WriteLine($"Parsing dump.cs files: {list.Count}");
+            var sw = Stopwatch.StartNew();
+            var module = ModuleDefinition.CreateModule("Dump_Multi", ModuleKind.Dll);
+            var state = new ParseState(module);
+
+            foreach (var path in list)
+            {
+                Console.WriteLine($"  First pass: {path}");
+                FirstPass(path, state);
+            }
+            Console.WriteLine($"First pass: {state.AllTypes.Count} types ({sw.Elapsed.TotalSeconds:F1}s)");
+
+            ResolveBaseTypes(state);
+
+            foreach (var path in list)
+            {
+                Console.WriteLine($"  Second pass: {path}");
+                SecondPass(path, state, includeType);
+            }
+            Console.WriteLine($"Second pass done ({sw.Elapsed.TotalSeconds:F1}s)");
+            return state.AllTypes;
+        }
+
         private static void FirstPass(string path, ParseState state)
         {
             string currentNamespace = string.Empty;
@@ -225,11 +256,11 @@ namespace SDKGeneratorBNM
 
                 if (!isTypeDecl && typeStack.Count > 0 && typeStack.Peek().Include)
                 {
-                    if (trimmed.StartsWith("// Fields", StringComparison.Ordinal))
+                    if (IsSectionHeader(trimmed, "Fields"))
                         section = MemberSection.Fields;
-                    else if (trimmed.StartsWith("// Properties", StringComparison.Ordinal))
+                    else if (IsSectionHeader(trimmed, "Properties"))
                         section = MemberSection.Properties;
-                    else if (trimmed.StartsWith("// Methods", StringComparison.Ordinal))
+                    else if (IsSectionHeader(trimmed, "Methods"))
                         section = MemberSection.Methods;
                     else if (trimmed.Length > 0 && !trimmed.StartsWith("//", StringComparison.Ordinal))
                     {
@@ -275,9 +306,11 @@ namespace SDKGeneratorBNM
         private static bool TryParseNamespaceComment(string line, out string ns)
         {
             ns = string.Empty;
-            if (!line.StartsWith("// Namespace:", StringComparison.Ordinal))
+            if (!TryGetCommentPayload(line, out var payload))
                 return false;
-            ns = line.Substring(13).Trim();
+            if (!payload.StartsWith("Namespace:", StringComparison.Ordinal))
+                return false;
+            ns = payload.Substring(10).Trim();
             return true;
         }
 
@@ -324,6 +357,9 @@ namespace SDKGeneratorBNM
             decl.GenericArity = 0;
             decl.GenericParams.Clear();
             decl.HasExplicitGenericArgs = false;
+
+            if (nameToken.StartsWith("<", StringComparison.Ordinal))
+                return;
 
             int lt = nameToken.IndexOf('<');
             if (lt >= 0)
@@ -641,6 +677,9 @@ namespace SDKGeneratorBNM
                         isOut = true;
                         idx++;
                         continue;
+                    case "static":
+                        idx++;
+                        continue;
                     case "params":
                         idx++;
                         continue;
@@ -737,6 +776,13 @@ namespace SDKGeneratorBNM
 
             if (TryResolveGenericParameter(clean, currentType, currentMethod, out var gp))
                 return gp;
+
+            if (clean.StartsWith("System.", StringComparison.Ordinal))
+            {
+                string sysName = clean.Substring(7);
+                if (SystemTypeAliases.TryGetValue(sysName, out var sysAlias))
+                    return sysAlias(state.Module);
+            }
 
             if (SystemTypeAliases.TryGetValue(clean, out var alias))
                 return alias(state.Module);
@@ -1000,6 +1046,24 @@ namespace SDKGeneratorBNM
         {
             int idx = line.IndexOf("//", StringComparison.Ordinal);
             return idx >= 0 ? line.Substring(0, idx) : line;
+        }
+
+        private static bool TryGetCommentPayload(string line, out string payload)
+        {
+            payload = string.Empty;
+            if (!line.StartsWith("//", StringComparison.Ordinal))
+                return false;
+            payload = line.Substring(2).TrimStart();
+            return payload.Length > 0;
+        }
+
+        private static bool IsSectionHeader(string trimmedLine, string name)
+        {
+            if (!TryGetCommentPayload(trimmedLine, out var payload))
+                return false;
+            if (payload.StartsWith(name + ":", StringComparison.Ordinal))
+                return true;
+            return payload.StartsWith(name, StringComparison.Ordinal);
         }
 
         private static TypeReference GetSystemType(ParseState state, string name) => new TypeReference("System", name, state.Module, state.Module.TypeSystem.CoreLibrary);

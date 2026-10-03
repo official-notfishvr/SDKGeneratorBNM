@@ -236,21 +236,33 @@ Examples:
 
         private static bool TryAddDirect(string path)
         {
+            if (ContainsWildcard(path))
+                return TryAddWildcard(path);
+
             if (Directory.Exists(path))
             {
+                bool added = false;
                 string dll = Path.Combine(path, "Assembly-CSharp.dll");
                 string dump = Path.Combine(path, "dump.cs");
                 if (File.Exists(dll))
                 {
                     DllPaths.Add(dll);
-                    return true;
+                    added = true;
                 }
                 if (File.Exists(dump))
                 {
                     DumpPaths.Add(dump);
-                    return true;
+                    added = true;
                 }
-                return false;
+                else
+                {
+                    foreach (var cs in Directory.GetFiles(path, "*.cs", SearchOption.TopDirectoryOnly))
+                    {
+                        DumpPaths.Add(cs);
+                        added = true;
+                    }
+                }
+                return added;
             }
             if (File.Exists(path))
             {
@@ -266,6 +278,29 @@ Examples:
                 }
             }
             return false;
+        }
+
+        private static bool ContainsWildcard(string path) => path.IndexOfAny(new[] { '*', '?' }) >= 0;
+
+        private static bool TryAddWildcard(string pattern)
+        {
+            string dir = Path.GetDirectoryName(pattern);
+            if (string.IsNullOrEmpty(dir))
+                dir = ".";
+            if (!Directory.Exists(dir))
+                return false;
+
+            string filePattern = Path.GetFileName(pattern);
+            if (string.IsNullOrEmpty(filePattern))
+                filePattern = "*";
+
+            bool added = false;
+            foreach (var file in Directory.GetFiles(dir, filePattern, SearchOption.TopDirectoryOnly))
+            {
+                if (TryAddDirect(file))
+                    added = true;
+            }
+            return added;
         }
 
         private static List<TypeDefinition> LoadTypes()
@@ -302,17 +337,17 @@ Examples:
                 }
             }
 
-            foreach (var dumpPath in DumpPaths)
+            if (DumpPaths.Count > 0)
             {
                 try
                 {
-                    var dumpTypes = DumpCsParser.ParseDump(dumpPath, IsValidType);
+                    var dumpTypes = DumpCsParser.ParseDumps(DumpPaths, IsValidType);
                     foreach (var type in dumpTypes)
                         AddTypeIfValid(type, allTypes, seen);
                 }
                 catch (Exception ex)
                 {
-                    Warn($"Could not parse {Path.GetFileName(dumpPath)}: {ex.Message}");
+                    Warn($"Could not parse dump.cs files: {ex.Message}");
                 }
             }
 
@@ -527,7 +562,10 @@ Examples:
                 cw.Unindent();
                 cw.Line("};");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to generate class {type.FullName}.", ex);
+            }
         }
 
         private static void GenerateEnum(TypeDefinition type, CodeWriter cw)
@@ -553,7 +591,10 @@ Examples:
                 cw.Unindent();
                 cw.Line("};");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to generate enum {type.FullName}.", ex);
+            }
         }
 
         private static string GetBaseClass(TypeDefinition type, HashSet<TypeDefinition> deps)
@@ -569,7 +610,7 @@ Examples:
             if (Utils.IsSystemNamespace(bt.Namespace ?? string.Empty))
                 return string.Empty;
 
-            var res = bt.Resolve();
+            var res = Utils.ResolveType(bt);
 
             if (bt.Namespace?.StartsWith("UnityEngine", StringComparison.Ordinal) == true)
             {
@@ -644,7 +685,7 @@ Examples:
                     continue;
                 }
 
-                var res = f.FieldType.Resolve();
+                var res = Utils.ResolveType(f.FieldType);
                 if (f.FieldType.FullName == "System.Single" || f.FieldType.FullName == "System.Double")
                 {
                     if (!val.Contains(".") && !val.Contains("e"))
@@ -759,7 +800,7 @@ Examples:
         private static void GenerateFieldGetter(FieldDefinition f, CodeWriter cw, TypeDefinition current, HashSet<string> gns)
         {
             string t = Utils.GetCppType(f.FieldType, current, cw.Imports);
-            var resolved = f.FieldType.Resolve();
+            var resolved = Utils.ResolveType(f.FieldType);
             if (resolved != null && Utils.ShouldAddDependency(resolved, current))
                 cw.Imports.Add(resolved);
             if (t.Contains("$") || (f.FieldType.IsGenericParameter && !current.HasGenericParameters))
@@ -800,7 +841,7 @@ Examples:
             if (f.IsInitOnly || Config.MethodAccessorStyle == Config.MethodStyle.Accessor)
                 return;
             string t = Utils.GetCppType(f.FieldType, current, cw.Imports);
-            var resolved = f.FieldType.Resolve();
+            var resolved = Utils.ResolveType(f.FieldType);
             if (resolved != null && Utils.ShouldAddDependency(resolved, current))
                 cw.Imports.Add(resolved);
             if (t.Contains("$") || (f.FieldType.IsGenericParameter && !current.HasGenericParameters))

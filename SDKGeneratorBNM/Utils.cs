@@ -9,6 +9,20 @@ namespace SDKGeneratorBNM
 {
     public static class Utils
     {
+        public static TypeDefinition ResolveType(TypeReference type)
+        {
+            if (type == null)
+                return null;
+            try
+            {
+                return type as TypeDefinition ?? type.Resolve();
+            }
+            catch (AssemblyResolutionException)
+            {
+                return null;
+            }
+        }
+
         public static readonly HashSet<string> ReservedTypeNames = new HashSet<string>(StringComparer.Ordinal);
 
         private static readonly Dictionary<string, string> PrimitiveTypeMappings = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -425,6 +439,33 @@ namespace SDKGeneratorBNM
             return resolved.IsEnum || resolved.IsValueType;
         }
 
+        private static void AddValueTypeDependency(TypeReference typeRef, TypeDefinition context, HashSet<TypeDefinition> deps)
+        {
+            if (deps == null || typeRef == null)
+                return;
+
+            if (typeRef.IsArray)
+            {
+                AddValueTypeDependency(typeRef.GetElementType(), context, deps);
+                return;
+            }
+            if (typeRef.IsByReference || typeRef.IsPointer)
+            {
+                AddValueTypeDependency(typeRef.GetElementType(), context, deps);
+                return;
+            }
+            if (typeRef is GenericInstanceType generic)
+            {
+                foreach (var argument in generic.GenericArguments)
+                    AddValueTypeDependency(argument, context, deps);
+                return;
+            }
+
+            var resolved = ResolveType(typeRef);
+            if (resolved != null && ShouldAddDependency(resolved, context))
+                deps.Add(resolved);
+        }
+
         public static string GetCppType(TypeReference typeRef, TypeDefinition context = null, HashSet<TypeDefinition> deps = null)
         {
             if (typeRef == null)
@@ -434,7 +475,10 @@ namespace SDKGeneratorBNM
             if (typeRef.IsPointer)
                 return GetCppType(typeRef.GetElementType(), context, deps) + "*";
             if (typeRef.IsArray)
+            {
+                AddValueTypeDependency(typeRef.GetElementType(), context, deps);
                 return $"::BNM::Structures::Mono::Array<{GetCppType(typeRef.GetElementType(), context, deps)}>*";
+            }
             if (typeRef.IsGenericParameter)
                 return typeRef.Name;
 
@@ -449,7 +493,7 @@ namespace SDKGeneratorBNM
             if (typeRef is GenericInstanceType git && TryMapGeneric(git, context, deps, out var genResult))
                 return genResult;
 
-            var resolved = typeRef as TypeDefinition ?? typeRef.Resolve();
+            var resolved = ResolveType(typeRef);
             if (resolved == null)
                 return typeRef.IsValueType ? "void*" : "::BNM::IL2CPP::Il2CppObject*";
             if (IsSystemNamespace(resolved.Namespace))
@@ -461,8 +505,7 @@ namespace SDKGeneratorBNM
             if (!Program.DefinedTypes.Contains(resolved.FullName))
                 return resolved.IsValueType ? "void*" : "::BNM::IL2CPP::Il2CppObject*";
 
-            if (deps != null && ShouldAddDependency(resolved, context))
-                deps.Add(resolved);
+            AddValueTypeDependency(resolved, context, deps);
 
             string path = GetFullCppPath(resolved);
             return (resolved.IsEnum || resolved.IsValueType) ? path : path + "*";
@@ -497,7 +540,7 @@ namespace SDKGeneratorBNM
                 return true;
             }
 
-            var resBase = git.ElementType.Resolve();
+            var resBase = ResolveType(git.ElementType);
             if (resBase != null && Program.DefinedTypes.Contains(resBase.FullName))
             {
                 if (deps != null && ShouldAddDependency(resBase, context))
